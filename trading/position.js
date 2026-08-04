@@ -1,4 +1,4 @@
-import { config } from "../config.js";
+import { getSettings } from "../settings.js";
 
 // One open trade and its exit rules. Watchlisted ("big news") tokens get more
 // room to run: a wider take-profit target and a longer max hold, per the
@@ -14,12 +14,14 @@ export class Position {
     this.amountSolSpent = params.amountSolSpent;
     this.openedAt = params.openedAt;
     this.highWaterMarkPriceSol = params.entryPriceSol;
+    this.lastPriceSol = params.entryPriceSol;
 
-    const multiplier = params.isWatchlisted ? config.bankroll.watchlistPositionMultiplier : 1;
-    this.takeProfitPct = config.exits.takeProfitPct * (params.isWatchlisted ? 1.5 : 1);
-    this.stopLossPct = config.exits.stopLossPct;
-    this.trailingStopPct = config.exits.trailingStopPct;
-    this.maxHoldTimeMs = config.exits.maxHoldTimeSec * 1000 * multiplier;
+    const settings = getSettings();
+    const multiplier = params.isWatchlisted ? settings.watchlistPositionMultiplier : 1;
+    this.takeProfitPct = settings.takeProfitPct * (params.isWatchlisted ? 1.5 : 1);
+    this.stopLossPct = settings.stopLossPct;
+    this.trailingStopPct = settings.trailingStopPct;
+    this.maxHoldTimeMs = settings.maxHoldTimeSec * 1000 * multiplier;
   }
 
   pnlPct(currentPriceSol) {
@@ -29,6 +31,7 @@ export class Position {
   // Call on every price tick. Updates internal trailing state as a side
   // effect, so this must be called even when the caller ignores the result.
   evaluate(currentPriceSol, now) {
+    this.lastPriceSol = currentPriceSol;
     if (currentPriceSol > this.highWaterMarkPriceSol) {
       this.highWaterMarkPriceSol = currentPriceSol;
     }

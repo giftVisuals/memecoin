@@ -1,5 +1,5 @@
 import { PublicKey } from "@solana/web3.js";
-import { config } from "../config.js";
+import { getSettings } from "../settings.js";
 import { connection, getMintInfo } from "../solanaConnection.js";
 
 async function getTopHolderPct(mint, supply) {
@@ -15,7 +15,7 @@ async function getTopHolderPct(mint, supply) {
 // sensitive" actually means in code: reject far more than it accepts.
 export async function runSafetyFilters(mint, pair, ageSec) {
   const reasons = [];
-  const f = config.filters;
+  const f = getSettings();
 
   if (ageSec < f.minTokenAgeSec) {
     reasons.push(`too new (${ageSec}s < ${f.minTokenAgeSec}s minimum - let the dust settle)`);

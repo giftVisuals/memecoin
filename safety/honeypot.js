@@ -1,4 +1,4 @@
-import { config } from "../config.js";
+import { getSettings } from "../settings.js";
 import { SOL_MINT } from "../constants.js";
 
 const JUPITER_QUOTE_URL = "https://quote-api.jup.ag/v6/quote";
@@ -35,11 +35,12 @@ export async function checkSellable(mint, decimals) {
   if (outAmount <= 0) {
     return { sellable: false, priceImpactPct: 100, reason: "sell quote returned zero output" };
   }
-  if (priceImpactPct > config.filters.maxSellPriceImpactPct) {
+  const maxSellPriceImpactPct = getSettings().maxSellPriceImpactPct;
+  if (priceImpactPct > maxSellPriceImpactPct) {
     return {
       sellable: false,
       priceImpactPct,
-      reason: `sell price impact too high (${priceImpactPct.toFixed(1)}% > ${config.filters.maxSellPriceImpactPct}%)`,
+      reason: `sell price impact too high (${priceImpactPct.toFixed(1)}% > ${maxSellPriceImpactPct}%)`,
     };
   }
 

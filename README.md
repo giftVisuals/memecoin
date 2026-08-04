@@ -1,10 +1,12 @@
-# Memecoin Sniper Bot (Solana)
+# G4 Scraper (Solana memecoin bot)
 
 Watches for newly launched Solana memecoins (via pump.fun), runs them through
 safety filters, buys the ones that pass, and exits automatically on take-profit,
 stop-loss, a trailing stop, or a max hold time. Includes a "watchlist" mode for
 tokens named after notable people/events (e.g. a coin literally named "TRUMP"),
-which get larger sizing and more room to run.
+which get larger sizing and more room to run. Ships with a password-protected
+web dashboard to watch PnL and tune everything without touching code or
+redeploying.
 
 ## Read this before doing anything else
 
@@ -18,10 +20,13 @@ there until you've watched it make decisions for a while and understand why.
 **On the "big news" feature**: there is no free, reliable way to watch the live
 Twitter/X firehose for "a notable person just launched a coin" in real time —
 that requires a paid API tier. What this bot actually does is match new token
-names/symbols against a keyword watchlist (`WATCHLIST_KEYWORDS` in `.env`).
+names/symbols against a keyword watchlist (editable from the dashboard).
 That's a real, useful heuristic (it would have caught a token named "TRUMP" or
-"MELANIA" at launch) but it is not surveillance of social media — don't rely on
-it for anything beyond what it is.
+"MELANIA" at launch) but it is not surveillance of social media, and it can be
+gamed — copycat/troll tokens riding on a name show up too (we've seen this live:
+multiple unrelated "Epstein" tokens deployed by randoms). That's exactly why
+watchlist status only changes position size and hold time — it never skips the
+safety filters below.
 
 ## How it decides
 
@@ -38,14 +43,29 @@ it for anything beyond what it is.
 4. **Honeypot check** (`safety/honeypot.js`) - simulates a sell via
    Jupiter's quote API; rejects tokens with no sell route or extreme price
    impact.
-5. **Watchlist check** - name/symbol matched against `WATCHLIST_KEYWORDS`.
-   Matches get `WATCHLIST_POSITION_MULTIPLIER`x position size and a longer
-   max hold time.
-6. **Buy** - sized from `POSITION_SIZE_SOL`, capped by available balance and
-   `MAX_CONCURRENT_POSITIONS`.
+5. **Watchlist check** - name/symbol matched against the watchlist keywords.
+   Matches get a bigger position size and a longer max hold time.
+6. **Buy** - sized from the position size setting, capped by available
+   balance and the max concurrent positions limit.
 7. **Exit** (`trading/position.js`) - closes on whichever hits first:
    take-profit %, stop-loss %, trailing stop % (drop from peak), or max hold
    time.
+
+## Dashboard
+
+Every deploy serves a small web dashboard ("G4 Scraper") at the service's
+Railway URL, password-protected with HTTP basic auth:
+
+- **Overview** - net PnL, total earned, total lost, memecoins traded, win
+  rate, wallet balance, and any currently open positions with live PnL %.
+- **Settings** - watchlist keywords, position sizing, every safety filter,
+  and every exit rule. Changes save to `data/settings.json` and apply to the
+  bot's very next decision — no redeploy needed.
+- **History** - every trade the bot has made, paper or live.
+
+Login username is fixed as `g4`; the password comes from `DASHBOARD_PASSWORD`.
+If you don't set it, the bot generates a random one at boot and prints it once
+to the logs — set it explicitly in Railway so it's stable across restarts.
 
 ## Project layout
 
@@ -53,17 +73,20 @@ Plain Node.js, ESM `import`/`export`, no build step — run any file directly
 with `node`.
 
 ```
-server.js          entry point, boots the engine
+server.js          entry point, boots the engine + dashboard
 generateWallet.js   run once to create a wallet: node generateWallet.js
-config.js           reads .env into one config object
+config.js           reads .env - restart-required settings only (mode, wallet, port)
+settings.js         dashboard-editable settings, persisted to data/settings.json
 constants.js        shared constants (SOL mint address, lamports/SOL)
 wallet.js           loads the signing keypair from SOLANA_PRIVATE_KEY
 solanaConnection.js shared RPC connection + mint-account reader
 sources/            pump.fun feed, DexScreener client, watchlist matcher
 safety/             liquidity/holder/authority filters, honeypot check
 trading/            position (TP/SL/trailing), paper broker, live broker, engine
-persistence/        JSON trade log (data/store.json)
+persistence/        JSON trade + PnL stats log (data/store.json)
 notify/             console logger
+web/                dashboard API server + basic auth
+public/             dashboard frontend (plain HTML/CSS/JS, no framework)
 ```
 
 ## Setup
@@ -76,9 +99,10 @@ cp .env.example .env
 
 Edit `.env`:
 - Leave `TRADING_MODE=paper` for now.
-- Set `WATCHLIST_KEYWORDS` to whatever names/events you want to catch.
-- Adjust `POSITION_SIZE_SOL`, `TAKE_PROFIT_PCT`, `STOP_LOSS_PCT` etc. to taste.
+- Set `DASHBOARD_PASSWORD` to something only you/your family know.
 - `SOLANA_PRIVATE_KEY` can stay empty in paper mode.
+- Everything else (watchlist, position size, TP/SL, filters) can stay on
+  defaults — you'll tune those from the dashboard, not `.env`.
 
 Run it locally:
 
@@ -86,8 +110,9 @@ Run it locally:
 npm run dev
 ```
 
-Watch the logs. Everything is simulated — no real funds move, but prices,
-liquidity, and safety checks are all real market data.
+Then open `http://localhost:3000` and log in with username `g4` and your
+`DASHBOARD_PASSWORD`. Everything is simulated in paper mode — no real funds
+move, but prices, liquidity, and safety checks are all real market data.
 
 ## Going live (only once you're comfortable with paper results)
 
@@ -103,6 +128,7 @@ liquidity, and safety checks are all real market data.
      `api.mainnet-beta.solana.com` endpoint is heavily rate-limited; a free
      tier from Helius or QuickNode will be far more reliable for a bot that's
      polling every few seconds.
+   - `DASHBOARD_PASSWORD=<something real>` if you haven't already.
 4. Deploy. Railway's Nixpacks auto-detects this as a plain Node app and runs
    `npm start` (`node server.js`) — no build step, no Dockerfile needed.
 5. Watch it closely for the first few hours. Kill it (`I_UNDERSTAND_THE_RISK=false`
@@ -110,13 +136,16 @@ liquidity, and safety checks are all real market data.
 
 ## Tuning notes
 
-- `MIN_LIQUIDITY_SOL` / `MAX_TOP_HOLDER_PCT` are your main rug filters —
-  tightening them means fewer trades but fewer disasters.
-- `MAX_SELL_PRICE_IMPACT_PCT` is your honeypot filter — lower is stricter.
-- With a $5-10 bankroll, keep `POSITION_SIZE_SOL` small enough to support
-  `MAX_CONCURRENT_POSITIONS` trades at once, or you'll skip signals while
-  waiting on capital.
-- All trades (paper and live) are logged to `data/store.json` for review.
+All of these are in the dashboard's Settings tab:
+
+- **Min liquidity / max top holder %** are your main rug filters — tightening
+  them means fewer trades but fewer disasters.
+- **Max sell price impact %** is your honeypot filter — lower is stricter.
+- With a $5-10 bankroll, keep **position size** small enough to support **max
+  concurrent positions** trades at once, or you'll skip signals while waiting
+  on capital.
+- All trades (paper and live) are logged to `data/store.json`, and rolled up
+  into the dashboard's PnL stats.
 
 ## What this is not
 

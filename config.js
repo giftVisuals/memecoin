@@ -28,6 +28,11 @@ if (tradingMode === "live" && !understandRisk) {
   );
 }
 
+// Note: the tunable trading parameters (watchlist, position size, TP/SL,
+// filters) used to live here. They now live in settings.js, backed by
+// data/settings.json, so they're editable from the dashboard without a
+// redeploy. This file is only for things that genuinely need a restart to
+// change: trading mode, wallet, network, and process config.
 export const config = {
   tradingMode,
 
@@ -38,33 +43,6 @@ export const config = {
 
   bankroll: {
     startingPaperBalanceSol: num("STARTING_PAPER_BALANCE_SOL", 0.05),
-    positionSizeSol: num("POSITION_SIZE_SOL", 0.01),
-    maxConcurrentPositions: num("MAX_CONCURRENT_POSITIONS", 3),
-    watchlistPositionMultiplier: num("WATCHLIST_POSITION_MULTIPLIER", 2),
-  },
-
-  filters: {
-    minLiquiditySol: num("MIN_LIQUIDITY_SOL", 3),
-    maxTopHolderPct: num("MAX_TOP_HOLDER_PCT", 25),
-    requireMintAuthorityRenounced: bool("REQUIRE_MINT_AUTHORITY_RENOUNCED", true),
-    requireFreezeAuthorityRenounced: bool("REQUIRE_FREEZE_AUTHORITY_RENOUNCED", true),
-    minTokenAgeSec: num("MIN_TOKEN_AGE_SEC", 20),
-    maxTokenAgeSec: num("MAX_TOKEN_AGE_SEC", 180),
-    maxSellPriceImpactPct: num("MAX_SELL_PRICE_IMPACT_PCT", 15),
-  },
-
-  exits: {
-    takeProfitPct: num("TAKE_PROFIT_PCT", 50),
-    stopLossPct: num("STOP_LOSS_PCT", 20),
-    trailingStopPct: num("TRAILING_STOP_PCT", 15),
-    maxHoldTimeSec: num("MAX_HOLD_TIME_SEC", 900),
-  },
-
-  watchlist: {
-    keywords: str("WATCHLIST_KEYWORDS", "trump,elon,musk,melania")
-      .split(",")
-      .map((k) => k.trim().toLowerCase())
-      .filter(Boolean),
   },
 
   sources: {
@@ -73,4 +51,7 @@ export const config = {
   },
 
   dataDir: str("DATA_DIR", "./data"),
+
+  port: num("PORT", 3000),
+  dashboardPassword: str("DASHBOARD_PASSWORD", ""),
 };

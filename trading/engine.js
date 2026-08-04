@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { getSettings } from "../settings.js";
 import { logger } from "../notify/logger.js";
 import { PumpFunSource } from "../sources/pumpfun.js";
 import { fetchPairData } from "../sources/dexscreener.js";
@@ -42,6 +43,28 @@ export class TradingEngine {
     if (this.tickHandle) clearInterval(this.tickHandle);
   }
 
+  // Read by the dashboard API. Uses each position's last-known price (set
+  // during monitorPositions ticks) instead of fetching fresh here, so
+  // polling the dashboard never adds extra DexScreener/RPC load.
+  async getStatus() {
+    const balanceSol = await this.broker.getBalanceSol();
+    return {
+      mode: config.tradingMode,
+      balanceSol,
+      pendingCandidates: this.pending.size,
+      openPositions: [...this.openPositions.values()].map((p) => ({
+        mint: p.mint,
+        symbol: p.symbol,
+        isWatchlisted: p.isWatchlisted,
+        entryPriceSol: p.entryPriceSol,
+        lastPriceSol: p.lastPriceSol,
+        pnlPct: p.pnlPct(p.lastPriceSol),
+        amountSolSpent: p.amountSolSpent,
+        openedAt: p.openedAt,
+      })),
+    };
+  }
+
   onNewToken(event) {
     if (this.pending.has(event.mint) || this.openPositions.has(event.mint)) return;
     this.pending.set(event.mint, { event });
@@ -52,13 +75,14 @@ export class TradingEngine {
 
   async processCandidates() {
     const now = Date.now();
+    const settings = getSettings();
 
     for (const [mint, candidate] of this.pending) {
       const ageSec = (now - candidate.event.seenAt) / 1000;
 
-      if (ageSec < config.filters.minTokenAgeSec) continue; // still waiting for the minimum age
+      if (ageSec < settings.minTokenAgeSec) continue; // still waiting for the minimum age
 
-      if (ageSec > config.filters.maxTokenAgeSec) {
+      if (ageSec > settings.maxTokenAgeSec) {
         this.pending.delete(mint);
         logger.info(`Dropped ${candidate.event.symbol}: aged out of the buy window`);
         continue;
@@ -95,16 +119,17 @@ export class TradingEngine {
   }
 
   async buy(event, priceSol) {
-    if (this.openPositions.size >= config.bankroll.maxConcurrentPositions) {
+    const settings = getSettings();
+
+    if (this.openPositions.size >= settings.maxConcurrentPositions) {
       logger.info(
-        `Skipping ${event.symbol}: max concurrent positions (${config.bankroll.maxConcurrentPositions}) reached`
+        `Skipping ${event.symbol}: max concurrent positions (${settings.maxConcurrentPositions}) reached`
       );
       return;
     }
 
     const watchlisted = isWatchlisted(event.name, event.symbol);
-    const targetSize =
-      config.bankroll.positionSizeSol * (watchlisted ? config.bankroll.watchlistPositionMultiplier : 1);
+    const targetSize = settings.positionSizeSol * (watchlisted ? settings.watchlistPositionMultiplier : 1);
     const balance = await this.broker.getBalanceSol();
 
     if (balance < targetSize * 0.5) {
