@@ -2,35 +2,25 @@ import { EventEmitter } from "node:events";
 import WebSocket from "ws";
 import { config } from "../config.js";
 
-export interface NewTokenEvent {
-  mint: string;
-  name: string;
-  symbol: string;
-  creator: string;
-  seenAt: number;
-  initialLiquiditySol: number;
-  marketCapSol: number;
-}
-
 // Thin wrapper around PumpPortal's public new-token-creation feed
 // (https://pumpportal.fun) - free, no API key, but best-effort/unofficial.
 // Reconnects with backoff since this is the bot's primary discovery source.
 export class PumpFunSource extends EventEmitter {
-  private ws: WebSocket | null = null;
-  private reconnectDelayMs = 2000;
-  private closedByUs = false;
+  ws = null;
+  reconnectDelayMs = 2000;
+  closedByUs = false;
 
-  start(): void {
+  start() {
     this.closedByUs = false;
     this.connect();
   }
 
-  stop(): void {
+  stop() {
     this.closedByUs = true;
     this.ws?.close();
   }
 
-  private connect(): void {
+  connect() {
     const ws = new WebSocket(config.sources.pumpfunWsUrl);
     this.ws = ws;
 
@@ -62,7 +52,7 @@ export class PumpFunSource extends EventEmitter {
     });
   }
 
-  private normalize(msg: any): NewTokenEvent | null {
+  normalize(msg) {
     if (!msg || msg.txType !== "create" || !msg.mint) return null;
     return {
       mint: msg.mint,

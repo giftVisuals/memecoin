@@ -30,12 +30,12 @@ it for anything beyond what it is.
 2. **Wait window** - ignores a token until it's at least `MIN_TOKEN_AGE_SEC`
    old (lets instant rugs reveal themselves) and gives up after
    `MAX_TOKEN_AGE_SEC` (momentum's likely gone by then).
-3. **Safety filters** (`src/safety/filters.ts`) - all must pass:
+3. **Safety filters** (`safety/filters.js`) - all must pass:
    - Minimum liquidity in SOL
    - Mint authority renounced (dev can't mint unlimited new supply)
    - Freeze authority renounced (dev can't freeze your tokens)
    - Top holder concentration under a max %
-4. **Honeypot check** (`src/safety/honeypot.ts`) - simulates a sell via
+4. **Honeypot check** (`safety/honeypot.js`) - simulates a sell via
    Jupiter's quote API; rejects tokens with no sell route or extreme price
    impact.
 5. **Watchlist check** - name/symbol matched against `WATCHLIST_KEYWORDS`.
@@ -43,9 +43,28 @@ it for anything beyond what it is.
    max hold time.
 6. **Buy** - sized from `POSITION_SIZE_SOL`, capped by available balance and
    `MAX_CONCURRENT_POSITIONS`.
-7. **Exit** (`src/trading/position.ts`) - closes on whichever hits first:
+7. **Exit** (`trading/position.js`) - closes on whichever hits first:
    take-profit %, stop-loss %, trailing stop % (drop from peak), or max hold
    time.
+
+## Project layout
+
+Plain Node.js, ESM `import`/`export`, no build step — run any file directly
+with `node`.
+
+```
+server.js          entry point, boots the engine
+generateWallet.js   run once to create a wallet: node generateWallet.js
+config.js           reads .env into one config object
+constants.js        shared constants (SOL mint address, lamports/SOL)
+wallet.js           loads the signing keypair from SOLANA_PRIVATE_KEY
+solanaConnection.js shared RPC connection + mint-account reader
+sources/            pump.fun feed, DexScreener client, watchlist matcher
+safety/             liquidity/holder/authority filters, honeypot check
+trading/            position (TP/SL/trailing), paper broker, live broker, engine
+persistence/        JSON trade log (data/store.json)
+notify/             console logger
+```
 
 ## Setup
 
@@ -84,8 +103,8 @@ liquidity, and safety checks are all real market data.
      `api.mainnet-beta.solana.com` endpoint is heavily rate-limited; a free
      tier from Helius or QuickNode will be far more reliable for a bot that's
      polling every few seconds.
-4. Deploy. Railway's Nixpacks auto-detects this as a Node app — `npm run build`
-   then `npm start`. No Dockerfile needed.
+4. Deploy. Railway's Nixpacks auto-detects this as a plain Node app and runs
+   `npm start` (`node server.js`) — no build step, no Dockerfile needed.
 5. Watch it closely for the first few hours. Kill it (`I_UNDERSTAND_THE_RISK=false`
    or stop the service) if anything looks off.
 

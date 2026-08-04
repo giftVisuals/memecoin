@@ -3,18 +3,12 @@ import { connection, getMintInfo } from "../solanaConnection.js";
 import { requireWallet } from "../wallet.js";
 import { store } from "../persistence/store.js";
 import { SOL_MINT, LAMPORTS_PER_SOL } from "../constants.js";
-import type { Broker, BuyResult, SellResult } from "./broker.js";
 
 const JUPITER_QUOTE_URL = "https://quote-api.jup.ag/v6/quote";
 const JUPITER_SWAP_URL = "https://quote-api.jup.ag/v6/swap";
 const SLIPPAGE_BPS = 1000; // 10% - wide on purpose, new pools are thin and volatile
 
-interface JupiterQuote {
-  outAmount: string;
-  [key: string]: unknown;
-}
-
-async function getQuote(inputMint: string, outputMint: string, amountRaw: string): Promise<JupiterQuote> {
+async function getQuote(inputMint, outputMint, amountRaw) {
   const url = new URL(JUPITER_QUOTE_URL);
   url.searchParams.set("inputMint", inputMint);
   url.searchParams.set("outputMint", outputMint);
@@ -23,10 +17,10 @@ async function getQuote(inputMint: string, outputMint: string, amountRaw: string
 
   const res = await fetch(url.toString());
   if (!res.ok) throw new Error(`Jupiter quote failed: ${res.status} ${await res.text()}`);
-  return (await res.json()) as JupiterQuote;
+  return res.json();
 }
 
-async function executeSwap(quote: JupiterQuote, userPublicKey: string): Promise<string> {
+async function executeSwap(quote, userPublicKey) {
   const wallet = requireWallet();
 
   const res = await fetch(JUPITER_SWAP_URL, {
@@ -41,7 +35,7 @@ async function executeSwap(quote: JupiterQuote, userPublicKey: string): Promise<
   });
   if (!res.ok) throw new Error(`Jupiter swap build failed: ${res.status} ${await res.text()}`);
 
-  const { swapTransaction } = (await res.json()) as { swapTransaction: string };
+  const { swapTransaction } = await res.json();
   const tx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, "base64"));
   tx.sign([wallet]);
 
@@ -53,15 +47,15 @@ async function executeSwap(quote: JupiterQuote, userPublicKey: string): Promise<
 }
 
 // Real trades via Jupiter's swap aggregator. Only ever instantiated when
-// TRADING_MODE=live and I_UNDERSTAND_THE_RISK=true (enforced in config.ts).
-export class LiveBroker implements Broker {
-  async getBalanceSol(): Promise<number> {
+// TRADING_MODE=live and I_UNDERSTAND_THE_RISK=true (enforced in config.js).
+export class LiveBroker {
+  async getBalanceSol() {
     const wallet = requireWallet();
     const lamports = await connection.getBalance(wallet.publicKey);
     return lamports / LAMPORTS_PER_SOL;
   }
 
-  async buy(mint: string, symbol: string, priceSol: number, solAmount: number): Promise<BuyResult> {
+  async buy(mint, symbol, priceSol, solAmount) {
     const wallet = requireWallet();
     const amountLamports = Math.round(solAmount * LAMPORTS_PER_SOL).toString();
 
@@ -89,7 +83,7 @@ export class LiveBroker implements Broker {
     return { amountTokens, amountSolSpent: solAmount };
   }
 
-  async sell(mint: string, symbol: string, priceSol: number, amountTokens: number): Promise<SellResult> {
+  async sell(mint, symbol, priceSol, amountTokens) {
     const wallet = requireWallet();
     const mintInfo = await getMintInfo(mint);
     const decimals = mintInfo?.decimals ?? 6;

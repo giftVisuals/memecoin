@@ -1,14 +1,8 @@
 import { PublicKey } from "@solana/web3.js";
 import { config } from "../config.js";
 import { connection, getMintInfo } from "../solanaConnection.js";
-import type { PairData } from "../sources/dexscreener.js";
 
-export interface FilterResult {
-  passed: boolean;
-  reasons: string[];
-}
-
-async function getTopHolderPct(mint: string, supply: number): Promise<number> {
+async function getTopHolderPct(mint, supply) {
   if (supply === 0) return 100;
   const largest = await connection.getTokenLargestAccounts(new PublicKey(mint));
   const top = largest.value[0];
@@ -19,12 +13,8 @@ async function getTopHolderPct(mint: string, supply: number): Promise<number> {
 // Runs every configured safety check for a candidate token. All of them must
 // pass before the engine is allowed to buy - this is what "sharp and
 // sensitive" actually means in code: reject far more than it accepts.
-export async function runSafetyFilters(
-  mint: string,
-  pair: PairData,
-  ageSec: number
-): Promise<FilterResult> {
-  const reasons: string[] = [];
+export async function runSafetyFilters(mint, pair, ageSec) {
+  const reasons = [];
   const f = config.filters;
 
   if (ageSec < f.minTokenAgeSec) {

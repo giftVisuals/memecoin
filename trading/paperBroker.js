@@ -1,16 +1,15 @@
 import { store } from "../persistence/store.js";
-import type { Broker, BuyResult, SellResult } from "./broker.js";
 
 // Simulated slippage so paper results aren't unrealistically clean - real
 // swaps on brand-new low-liquidity pools rarely fill at the quoted price.
 const SIMULATED_SLIPPAGE_PCT = 2;
 
-export class PaperBroker implements Broker {
-  async getBalanceSol(): Promise<number> {
+export class PaperBroker {
+  async getBalanceSol() {
     return store.getPaperBalance();
   }
 
-  async buy(mint: string, symbol: string, priceSol: number, solAmount: number): Promise<BuyResult> {
+  async buy(mint, symbol, priceSol, solAmount) {
     const balance = store.getPaperBalance();
     if (solAmount > balance) {
       throw new Error(`Paper balance too low: have ${balance} SOL, need ${solAmount} SOL`);
@@ -35,7 +34,7 @@ export class PaperBroker implements Broker {
     return { amountTokens, amountSolSpent: solAmount };
   }
 
-  async sell(mint: string, symbol: string, priceSol: number, amountTokens: number): Promise<SellResult> {
+  async sell(mint, symbol, priceSol, amountTokens) {
     const effectivePrice = priceSol * (1 - SIMULATED_SLIPPAGE_PCT / 100);
     const amountSolReceived = amountTokens * effectivePrice;
 

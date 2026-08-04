@@ -1,18 +1,18 @@
-function timestamp(): string {
+function timestamp() {
   return new Date().toISOString();
 }
 
 export const logger = {
-  info(msg: string): void {
+  info(msg) {
     console.log(`[${timestamp()}] ${msg}`);
   },
-  warn(msg: string): void {
+  warn(msg) {
     console.warn(`[${timestamp()}] WARN: ${msg}`);
   },
-  error(msg: string): void {
+  error(msg) {
     console.error(`[${timestamp()}] ERROR: ${msg}`);
   },
-  trade(msg: string): void {
+  trade(msg) {
     console.log(`[${timestamp()}] TRADE: ${msg}`);
   },
 };

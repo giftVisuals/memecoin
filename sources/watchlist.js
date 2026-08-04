@@ -6,7 +6,7 @@ import { config } from "../config.js";
 // match new token name/symbol against a keyword watchlist (config.watchlist),
 // which is what actually catches things like a token literally named
 // "TRUMP" or "MELANIA" at launch. Treat this as a heuristic, not surveillance.
-export function isWatchlisted(name: string, symbol: string): boolean {
+export function isWatchlisted(name, symbol) {
   const haystack = `${name} ${symbol}`.toLowerCase();
   return config.watchlist.keywords.some((keyword) => haystack.includes(keyword));
 }

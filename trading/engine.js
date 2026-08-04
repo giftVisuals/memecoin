@@ -1,6 +1,6 @@
 import { config } from "../config.js";
 import { logger } from "../notify/logger.js";
-import { PumpFunSource, type NewTokenEvent } from "../sources/pumpfun.js";
+import { PumpFunSource } from "../sources/pumpfun.js";
 import { fetchPairData } from "../sources/dexscreener.js";
 import { isWatchlisted } from "../sources/watchlist.js";
 import { runSafetyFilters } from "../safety/filters.js";
@@ -9,31 +9,26 @@ import { getMintInfo } from "../solanaConnection.js";
 import { Position } from "./position.js";
 import { PaperBroker } from "./paperBroker.js";
 import { LiveBroker } from "./liveBroker.js";
-import type { Broker } from "./broker.js";
 
 const TICK_INTERVAL_MS = 5000;
 
-interface Candidate {
-  event: NewTokenEvent;
-}
-
 export class TradingEngine {
-  private readonly source = new PumpFunSource();
-  private readonly broker: Broker = config.tradingMode === "live" ? new LiveBroker() : new PaperBroker();
-  private readonly pending = new Map<string, Candidate>();
-  private readonly openPositions = new Map<string, Position>();
-  private tickHandle: NodeJS.Timeout | null = null;
+  source = new PumpFunSource();
+  broker = config.tradingMode === "live" ? new LiveBroker() : new PaperBroker();
+  pending = new Map();
+  openPositions = new Map();
+  tickHandle = null;
 
-  async start(): Promise<void> {
+  async start() {
     logger.info(
       `Starting in ${config.tradingMode.toUpperCase()} mode. ` +
         `Balance: ${(await this.broker.getBalanceSol()).toFixed(4)} SOL`
     );
 
-    this.source.on("newToken", (event: NewTokenEvent) => this.onNewToken(event));
+    this.source.on("newToken", (event) => this.onNewToken(event));
     this.source.on("connected", () => logger.info("Connected to pump.fun new-token feed"));
     this.source.on("disconnected", () => logger.warn("Disconnected from pump.fun feed, reconnecting..."));
-    this.source.on("error", (err: Error) => logger.error(`pump.fun feed error: ${err.message}`));
+    this.source.on("error", (err) => logger.error(`pump.fun feed error: ${err.message}`));
     this.source.start();
 
     this.tickHandle = setInterval(() => {
@@ -42,12 +37,12 @@ export class TradingEngine {
     }, TICK_INTERVAL_MS);
   }
 
-  stop(): void {
+  stop() {
     this.source.stop();
     if (this.tickHandle) clearInterval(this.tickHandle);
   }
 
-  private onNewToken(event: NewTokenEvent): void {
+  onNewToken(event) {
     if (this.pending.has(event.mint) || this.openPositions.has(event.mint)) return;
     this.pending.set(event.mint, { event });
 
@@ -55,7 +50,7 @@ export class TradingEngine {
     logger.info(`New token: ${event.symbol} (${event.name}) ${event.mint}${watchlistTag}`);
   }
 
-  private async processCandidates(): Promise<void> {
+  async processCandidates() {
     const now = Date.now();
 
     for (const [mint, candidate] of this.pending) {
@@ -73,7 +68,7 @@ export class TradingEngine {
     }
   }
 
-  private async evaluateCandidate(candidate: Candidate, ageSec: number): Promise<void> {
+  async evaluateCandidate(candidate, ageSec) {
     const { event } = candidate;
 
     const pair = await fetchPairData(event.mint);
@@ -99,14 +94,17 @@ export class TradingEngine {
     await this.buy(event, pair.priceSol);
   }
 
-  private async buy(event: NewTokenEvent, priceSol: number): Promise<void> {
+  async buy(event, priceSol) {
     if (this.openPositions.size >= config.bankroll.maxConcurrentPositions) {
-      logger.info(`Skipping ${event.symbol}: max concurrent positions (${config.bankroll.maxConcurrentPositions}) reached`);
+      logger.info(
+        `Skipping ${event.symbol}: max concurrent positions (${config.bankroll.maxConcurrentPositions}) reached`
+      );
       return;
     }
 
     const watchlisted = isWatchlisted(event.name, event.symbol);
-    const targetSize = config.bankroll.positionSizeSol * (watchlisted ? config.bankroll.watchlistPositionMultiplier : 1);
+    const targetSize =
+      config.bankroll.positionSizeSol * (watchlisted ? config.bankroll.watchlistPositionMultiplier : 1);
     const balance = await this.broker.getBalanceSol();
 
     if (balance < targetSize * 0.5) {
@@ -136,7 +134,7 @@ export class TradingEngine {
     }
   }
 
-  private async monitorPositions(): Promise<void> {
+  async monitorPositions() {
     const now = Date.now();
 
     for (const [mint, position] of this.openPositions) {

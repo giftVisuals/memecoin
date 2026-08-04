@@ -2,13 +2,13 @@ import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "./config.js";
 
-export function loadWallet(): Keypair | null {
+export function loadWallet() {
   if (!config.wallet.privateKey) return null;
   const secret = bs58.decode(config.wallet.privateKey);
   return Keypair.fromSecretKey(secret);
 }
 
-export function requireWallet(): Keypair {
+export function requireWallet() {
   const wallet = loadWallet();
   if (!wallet) {
     throw new Error(

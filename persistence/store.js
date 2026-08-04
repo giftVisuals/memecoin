@@ -2,67 +2,48 @@ import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
 
-export interface TradeRecord {
-  id: string;
-  mint: string;
-  symbol: string;
-  isWatchlisted: boolean;
-  side: "buy" | "sell";
-  priceSol: number;
-  amountTokens: number;
-  amountSol: number;
-  reason?: string;
-  timestamp: string;
-  mode: "paper" | "live";
-}
-
-interface StoreShape {
-  paperBalanceSol: number;
-  trades: TradeRecord[];
-}
-
 const filePath = path.join(config.dataDir, "store.json");
 
-function ensureDataDir(): void {
+function ensureDataDir() {
   fs.mkdirSync(config.dataDir, { recursive: true });
 }
 
-function load(): StoreShape {
+function load() {
   ensureDataDir();
   if (!fs.existsSync(filePath)) {
-    const initial: StoreShape = {
+    const initial = {
       paperBalanceSol: config.bankroll.startingPaperBalanceSol,
       trades: [],
     };
     fs.writeFileSync(filePath, JSON.stringify(initial, null, 2));
     return initial;
   }
-  return JSON.parse(fs.readFileSync(filePath, "utf-8")) as StoreShape;
+  return JSON.parse(fs.readFileSync(filePath, "utf-8"));
 }
 
-function save(data: StoreShape): void {
+function save(data) {
   ensureDataDir();
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
 export const store = {
-  getPaperBalance(): number {
+  getPaperBalance() {
     return load().paperBalanceSol;
   },
 
-  setPaperBalance(balance: number): void {
+  setPaperBalance(balance) {
     const data = load();
     data.paperBalanceSol = balance;
     save(data);
   },
 
-  recordTrade(trade: TradeRecord): void {
+  recordTrade(trade) {
     const data = load();
     data.trades.push(trade);
     save(data);
   },
 
-  getTrades(): TradeRecord[] {
+  getTrades() {
     return load().trades;
   },
 };

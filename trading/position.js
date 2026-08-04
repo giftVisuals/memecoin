@@ -1,38 +1,11 @@
 import { config } from "../config.js";
 
-export type CloseReason = "take-profit" | "stop-loss" | "trailing-stop" | "max-hold-time";
-
-export interface PositionParams {
-  mint: string;
-  symbol: string;
-  isWatchlisted: boolean;
-  entryPriceSol: number;
-  amountTokens: number;
-  amountSolSpent: number;
-  openedAt: number;
-}
-
 // One open trade and its exit rules. Watchlisted ("big news") tokens get more
 // room to run: a wider take-profit target and a longer max hold, per the
 // "hold for coins like this more" instruction - everything else uses the
 // standard, tighter rules since most new memecoins should be exited fast.
 export class Position {
-  readonly mint: string;
-  readonly symbol: string;
-  readonly isWatchlisted: boolean;
-  readonly entryPriceSol: number;
-  readonly amountTokens: number;
-  readonly amountSolSpent: number;
-  readonly openedAt: number;
-
-  private highWaterMarkPriceSol: number;
-
-  private readonly takeProfitPct: number;
-  private readonly stopLossPct: number;
-  private readonly trailingStopPct: number;
-  private readonly maxHoldTimeMs: number;
-
-  constructor(params: PositionParams) {
+  constructor(params) {
     this.mint = params.mint;
     this.symbol = params.symbol;
     this.isWatchlisted = params.isWatchlisted;
@@ -49,19 +22,20 @@ export class Position {
     this.maxHoldTimeMs = config.exits.maxHoldTimeSec * 1000 * multiplier;
   }
 
-  pnlPct(currentPriceSol: number): number {
+  pnlPct(currentPriceSol) {
     return ((currentPriceSol - this.entryPriceSol) / this.entryPriceSol) * 100;
   }
 
   // Call on every price tick. Updates internal trailing state as a side
   // effect, so this must be called even when the caller ignores the result.
-  evaluate(currentPriceSol: number, now: number): { shouldClose: boolean; reason?: CloseReason } {
+  evaluate(currentPriceSol, now) {
     if (currentPriceSol > this.highWaterMarkPriceSol) {
       this.highWaterMarkPriceSol = currentPriceSol;
     }
 
     const pnlPct = this.pnlPct(currentPriceSol);
-    const dropFromHighPct = ((this.highWaterMarkPriceSol - currentPriceSol) / this.highWaterMarkPriceSol) * 100;
+    const dropFromHighPct =
+      ((this.highWaterMarkPriceSol - currentPriceSol) / this.highWaterMarkPriceSol) * 100;
 
     if (pnlPct >= this.takeProfitPct) {
       return { shouldClose: true, reason: "take-profit" };

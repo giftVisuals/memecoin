@@ -1,6 +1,6 @@
 import "dotenv/config";
 
-function num(name: string, fallback: number): number {
+function num(name, fallback) {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
   const n = Number(raw);
@@ -8,17 +8,17 @@ function num(name: string, fallback: number): number {
   return n;
 }
 
-function bool(name: string, fallback: boolean): boolean {
+function bool(name, fallback) {
   const raw = process.env[name];
   if (raw === undefined || raw === "") return fallback;
   return raw.toLowerCase() === "true";
 }
 
-function str(name: string, fallback: string): string {
+function str(name, fallback) {
   return process.env[name] ?? fallback;
 }
 
-const tradingMode = str("TRADING_MODE", "paper") as "paper" | "live";
+const tradingMode = str("TRADING_MODE", "paper");
 const understandRisk = bool("I_UNDERSTAND_THE_RISK", false);
 
 if (tradingMode === "live" && !understandRisk) {
@@ -74,5 +74,3 @@ export const config = {
 
   dataDir: str("DATA_DIR", "./data"),
 };
-
-export type Config = typeof config;
