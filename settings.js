@@ -9,6 +9,11 @@ const filePath = path.join(config.dataDir, "settings.json");
 // values come from .env on first boot; after that, data/settings.json is the
 // source of truth and env vars for these specific keys are ignored.
 const DEFAULT_SETTINGS = {
+  // Kill switch: when true, the engine stops opening new positions. Existing
+  // open positions keep running their normal take-profit/stop-loss/trailing
+  // rules - pausing never abandons a position mid-trade.
+  tradingPaused: false,
+
   watchlistKeywords: ["trump", "elon", "musk", "melania"],
 
   positionSizeSol: 0.01,
@@ -45,6 +50,7 @@ function readFromEnvDefaults() {
   };
 
   return {
+    tradingPaused: false,
     watchlistKeywords: str("WATCHLIST_KEYWORDS", DEFAULT_SETTINGS.watchlistKeywords.join(","))
       .split(",")
       .map((k) => k.trim().toLowerCase())
@@ -105,7 +111,7 @@ const NUMERIC_KEYS = [
   "trailingStopPct",
   "maxHoldTimeSec",
 ];
-const BOOLEAN_KEYS = ["requireMintAuthorityRenounced", "requireFreezeAuthorityRenounced"];
+const BOOLEAN_KEYS = ["requireMintAuthorityRenounced", "requireFreezeAuthorityRenounced", "tradingPaused"];
 
 export function getSettings() {
   return load();

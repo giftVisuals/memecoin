@@ -51,6 +51,7 @@ export class TradingEngine {
     return {
       mode: config.tradingMode,
       balanceSol,
+      tradingPaused: getSettings().tradingPaused,
       pendingCandidates: this.pending.size,
       openPositions: [...this.openPositions.values()].map((p) => ({
         mint: p.mint,
@@ -94,6 +95,12 @@ export class TradingEngine {
 
   async evaluateCandidate(candidate, ageSec) {
     const { event } = candidate;
+
+    if (getSettings().tradingPaused) {
+      // Leave it in `pending` rather than dropping it - if trading resumes
+      // before it ages out, it still gets a fair evaluation.
+      return;
+    }
 
     const pair = await fetchPairData(event.mint);
     if (!pair) return; // not indexed by DexScreener yet, try again next tick

@@ -44,6 +44,19 @@ async function refreshStatus() {
 
   document.getElementById("balanceBadge").textContent = `${Number(data.balanceSol).toFixed(4)} SOL`;
 
+  const pauseCard = document.getElementById("pauseCard");
+  const pauseLabel = document.getElementById("pauseStatusLabel");
+  const pauseBtn = document.getElementById("pauseToggleBtn");
+  if (data.tradingPaused) {
+    pauseCard.classList.add("paused");
+    pauseLabel.textContent = "Trading Paused";
+    pauseBtn.textContent = "Resume Trading";
+  } else {
+    pauseCard.classList.remove("paused");
+    pauseLabel.textContent = "Trading Active";
+    pauseBtn.textContent = "Pause Trading";
+  }
+
   const stats = data.stats;
   const netPnlEl = document.getElementById("statNetPnl");
   netPnlEl.textContent = formatSol(stats.netPnlSol);
@@ -134,6 +147,24 @@ function escapeHtml(str) {
   div.textContent = str ?? "";
   return div.innerHTML;
 }
+
+// ---- Pause / kill switch ----
+
+document.getElementById("pauseToggleBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("pauseToggleBtn");
+  const currentlyPaused = document.getElementById("pauseCard").classList.contains("paused");
+  btn.disabled = true;
+  try {
+    await fetch("/api/settings", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tradingPaused: !currentlyPaused }),
+    });
+    await refreshStatus();
+  } finally {
+    btn.disabled = false;
+  }
+});
 
 // ---- Wallet ----
 

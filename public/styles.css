@@ -474,6 +474,48 @@ body {
   color: var(--green);
 }
 
+/* ---- Pause / kill switch ---- */
+
+.pause-card {
+  border-color: rgba(47, 191, 113, 0.3);
+  background: linear-gradient(180deg, rgba(47, 191, 113, 0.05), var(--card-bg));
+}
+
+.pause-card.paused {
+  border-color: rgba(224, 177, 63, 0.4);
+  background: linear-gradient(180deg, rgba(224, 177, 63, 0.08), var(--card-bg));
+}
+
+.pause-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.pause-status-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.pause-card.paused .pause-status-label {
+  color: var(--gold);
+}
+
+.pause-hint {
+  margin: 4px 0 0;
+}
+
+.pause-row .btn-primary {
+  flex-shrink: 0;
+}
+
+.pause-card.paused .btn-primary {
+  background: linear-gradient(135deg, var(--gold), #c99a2e);
+  box-shadow: 0 4px 14px rgba(224, 177, 63, 0.3);
+}
+
 /* ---- Wallet ---- */
 
 .address-block {
