@@ -54,4 +54,12 @@ export const config = {
 
   port: num("PORT", 3000),
   dashboardPassword: str("DASHBOARD_PASSWORD", ""),
+
+  // Optional: free Upstash Redis REST API, used to back up trade history and
+  // settings so they survive a redeploy without needing a Railway Volume.
+  // Both unset = feature is simply off, everything else behaves as before.
+  cloudBackup: {
+    url: str("UPSTASH_REDIS_REST_URL", ""),
+    token: str("UPSTASH_REDIS_REST_TOKEN", ""),
+  },
 };

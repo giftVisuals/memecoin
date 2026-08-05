@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
+import { backupStoreAsync } from "./cloudBackup.js";
 
 const filePath = path.join(config.dataDir, "store.json");
 
@@ -23,7 +24,9 @@ function load() {
 
 function save(data) {
   ensureDataDir();
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  const content = JSON.stringify(data, null, 2);
+  fs.writeFileSync(filePath, content);
+  backupStoreAsync(content);
 }
 
 export const store = {

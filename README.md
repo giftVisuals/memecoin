@@ -83,7 +83,7 @@ solanaConnection.js shared RPC connection + mint-account reader
 sources/            pump.fun feed, DexScreener client, watchlist matcher
 safety/             liquidity/holder/authority filters, honeypot check
 trading/            position (TP/SL/trailing), paper broker, live broker, engine
-persistence/        JSON trade + PnL stats log (data/store.json)
+persistence/        JSON trade + PnL stats log (data/store.json), optional cloud backup
 notify/             console logger
 web/                dashboard API server + basic auth
 public/             dashboard frontend (plain HTML/CSS/JS, no framework)
@@ -116,20 +116,38 @@ move, but prices, liquidity, and safety checks are all real market data.
 
 ## Persistent storage on Railway
 
-Railway's filesystem resets on every redeploy by default. Without a Volume,
-that means your trade history and any settings you've changed from the
-dashboard get wiped every time new code ships. Set this up once:
+Railway's filesystem resets on every redeploy by default. Without something
+in place, that means your trade history and any settings you've changed from
+the dashboard get wiped every time new code ships. Two ways to fix it —
+pick one:
 
-1. In your Railway service, go to **Settings → Volumes** → **+ New Volume**.
-2. Set the mount path to `/data`.
-3. Go to **Variables** and set `DATA_DIR=/data` (overriding the `./data`
-   default).
-4. Railway redeploys automatically after a variable change. Once it's back
-   up, `data/store.json` and `data/settings.json` live on the volume and
-   survive every future redeploy, restart, or code push.
+**Option A: Cloud backup (recommended if you don't have a laptop handy)**
 
-Do this before you care about the numbers on the Overview tab being
-permanent — otherwise every deploy quietly resets them to zero.
+No Railway UI fiddling, works entirely from a phone browser:
+
+1. Sign up free at [upstash.com](https://upstash.com), create a Redis
+   database (any region).
+2. On the database's page, copy the **REST URL** and **REST TOKEN**.
+3. In Railway → Variables, set `UPSTASH_REDIS_REST_URL` and
+   `UPSTASH_REDIS_REST_TOKEN` to those two values.
+4. Redeploy. Logs should show `Cloud backup enabled` on boot. From then on,
+   every trade and every settings change is backed up automatically, and
+   restored automatically the next time the app boots fresh.
+
+**Option B: Railway Volume**
+
+1. In your Railway project's canvas view, add a **Volume** (via "+ New" →
+   Volume) and attach it to this service.
+2. Set its mount path to `/data`.
+3. In Variables, set `DATA_DIR=/data`.
+4. Redeploy. This is Railway's own disk, so it's persistent with no external
+   account needed — but attaching a Volume involves dragging connections on
+   the project canvas, which is awkward on mobile and easiest from a
+   desktop browser.
+
+Either one is enough — you don't need both. Do this before you care about
+the numbers on the Overview tab being permanent, especially once real funds
+are involved.
 
 ## Going live (only once you're comfortable with paper results)
 

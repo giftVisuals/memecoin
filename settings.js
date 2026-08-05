@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
+import { backupSettingsAsync } from "./persistence/cloudBackup.js";
 
 const filePath = path.join(config.dataDir, "settings.json");
 
@@ -81,7 +82,9 @@ function load() {
   ensureDataDir();
   if (!fs.existsSync(filePath)) {
     cache = readFromEnvDefaults();
-    fs.writeFileSync(filePath, JSON.stringify(cache, null, 2));
+    const content = JSON.stringify(cache, null, 2);
+    fs.writeFileSync(filePath, content);
+    backupSettingsAsync(content);
     return cache;
   }
   cache = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(filePath, "utf-8")) };
@@ -136,7 +139,9 @@ export function updateSettings(partial) {
   }
 
   ensureDataDir();
-  fs.writeFileSync(filePath, JSON.stringify(next, null, 2));
+  const content = JSON.stringify(next, null, 2);
+  fs.writeFileSync(filePath, content);
+  backupSettingsAsync(content);
   cache = next;
   return next;
 }
