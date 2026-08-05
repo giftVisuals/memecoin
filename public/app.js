@@ -1,4 +1,8 @@
-const REFRESH_MS = 5000;
+// Every refresh hits the RPC for balance checks. This is pure convenience
+// (nothing here affects trading decisions), so it stays well above the
+// engine's own 5s tick to avoid competing for the same rate-limited RPC
+// quota that actually matters for trading.
+const REFRESH_MS = 20000;
 
 function shortMint(mint) {
   return mint.length > 10 ? `${mint.slice(0, 4)}...${mint.slice(-4)}` : mint;
