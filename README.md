@@ -114,6 +114,23 @@ Then open `http://localhost:3000` and log in with username `g4` and your
 `DASHBOARD_PASSWORD`. Everything is simulated in paper mode — no real funds
 move, but prices, liquidity, and safety checks are all real market data.
 
+## Persistent storage on Railway
+
+Railway's filesystem resets on every redeploy by default. Without a Volume,
+that means your trade history and any settings you've changed from the
+dashboard get wiped every time new code ships. Set this up once:
+
+1. In your Railway service, go to **Settings → Volumes** → **+ New Volume**.
+2. Set the mount path to `/data`.
+3. Go to **Variables** and set `DATA_DIR=/data` (overriding the `./data`
+   default).
+4. Railway redeploys automatically after a variable change. Once it's back
+   up, `data/store.json` and `data/settings.json` live on the volume and
+   survive every future redeploy, restart, or code push.
+
+Do this before you care about the numbers on the Overview tab being
+permanent — otherwise every deploy quietly resets them to zero.
+
 ## Going live (only once you're comfortable with paper results)
 
 1. Run `npm run generate-wallet` again for a real wallet (don't reuse a key
