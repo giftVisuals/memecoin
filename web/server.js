@@ -5,6 +5,9 @@ import { config } from "../config.js";
 import { logger } from "../notify/logger.js";
 import { store } from "../persistence/store.js";
 import { getSettings, updateSettings } from "../settings.js";
+import { loadWallet, generateNewWallet } from "../wallet.js";
+import { connection } from "../solanaConnection.js";
+import { LAMPORTS_PER_SOL } from "../constants.js";
 import { requireAuth } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -43,6 +46,32 @@ export function startDashboardServer(engine) {
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
+  });
+
+  app.get("/api/wallet", async (req, res) => {
+    const wallet = loadWallet();
+    if (!wallet) {
+      res.json({ hasWallet: false });
+      return;
+    }
+    try {
+      const lamports = await connection.getBalance(wallet.publicKey);
+      res.json({
+        hasWallet: true,
+        address: wallet.publicKey.toBase58(),
+        balanceSol: lamports / LAMPORTS_PER_SOL,
+      });
+    } catch (err) {
+      res.json({ hasWallet: true, address: wallet.publicKey.toBase58(), balanceSol: null, error: err.message });
+    }
+  });
+
+  // Generates a keypair and returns the secret key exactly once - nothing is
+  // written to disk or logged. The user must copy it and set it as
+  // SOLANA_PRIVATE_KEY in Railway themselves; this endpoint can't do that
+  // part for them, since it doesn't have access to Railway's variables.
+  app.post("/api/wallet/generate", (req, res) => {
+    res.json(generateNewWallet());
   });
 
   const server = app.listen(config.port, () => {

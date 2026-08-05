@@ -18,3 +18,15 @@ export function requireWallet() {
   }
   return wallet;
 }
+
+// Generates a brand new keypair for the dashboard's "Generate Wallet" flow.
+// Deliberately not persisted anywhere - the caller is responsible for
+// showing the secret key to the user exactly once so they can save it and
+// paste it into SOLANA_PRIVATE_KEY themselves.
+export function generateNewWallet() {
+  const keypair = Keypair.generate();
+  return {
+    address: keypair.publicKey.toBase58(),
+    privateKeyBase58: bs58.encode(keypair.secretKey),
+  };
+}

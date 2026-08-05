@@ -267,8 +267,8 @@ body {
   margin-top: 8px;
 }
 
-.data-table.hidden {
-  display: none;
+.hidden {
+  display: none !important;
 }
 
 .data-table th {
@@ -447,6 +447,72 @@ body {
 
 .btn-primary:active {
   transform: translateY(1px);
+}
+
+.btn-secondary {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn-secondary:hover {
+  border-color: var(--blue);
+  background: var(--card-bg-hover);
+}
+
+.btn-secondary.copied {
+  border-color: var(--green);
+  color: var(--green);
+}
+
+/* ---- Wallet ---- */
+
+.address-block {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 12px 14px;
+}
+
+.address-text {
+  flex: 1;
+  font-size: 13px;
+  word-break: break-all;
+  color: var(--text-primary);
+}
+
+.wallet-balance-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.card-warning {
+  border-color: rgba(224, 177, 63, 0.4);
+  background: linear-gradient(180deg, rgba(224, 177, 63, 0.06), var(--card-bg));
+}
+
+.card-warning .field {
+  margin-bottom: 14px;
+}
+
+.card-warning .btn-primary {
+  margin-top: 4px;
 }
 
 /* ---- Responsive ---- */

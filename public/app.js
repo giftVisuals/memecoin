@@ -135,6 +135,84 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// ---- Wallet ----
+
+async function copyToClipboard(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = button.textContent;
+    button.textContent = "Copied";
+    button.classList.add("copied");
+    setTimeout(() => {
+      button.textContent = original;
+      button.classList.remove("copied");
+    }, 1500);
+  } catch {
+    // Clipboard API unavailable (e.g. non-HTTPS) - nothing to fall back to safely.
+  }
+}
+
+let revealingNewWallet = false;
+
+async function refreshWallet() {
+  if (revealingNewWallet) return; // don't clobber the one-time key reveal mid-poll
+
+  const res = await fetch("/api/wallet");
+  if (!res.ok) return;
+  const data = await res.json();
+
+  const noneCard = document.getElementById("walletNoneCard");
+  const existingCard = document.getElementById("walletExistingCard");
+
+  if (!data.hasWallet) {
+    noneCard.classList.remove("hidden");
+    existingCard.classList.add("hidden");
+    return;
+  }
+
+  noneCard.classList.add("hidden");
+  existingCard.classList.remove("hidden");
+  document.getElementById("walletAddress").textContent = data.address;
+  document.getElementById("walletBalance").textContent =
+    data.balanceSol === null ? "unavailable" : `${Number(data.balanceSol).toFixed(4)} SOL`;
+}
+
+document.getElementById("copyAddressBtn").addEventListener("click", (e) => {
+  copyToClipboard(document.getElementById("walletAddress").textContent, e.target);
+});
+
+document.getElementById("generateWalletBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("generateWalletBtn");
+  btn.disabled = true;
+  btn.textContent = "Generating...";
+  try {
+    const res = await fetch("/api/wallet/generate", { method: "POST" });
+    const data = await res.json();
+    document.getElementById("revealAddress").textContent = data.address;
+    document.getElementById("revealPrivateKey").textContent = data.privateKeyBase58;
+    document.getElementById("walletRevealCard").classList.remove("hidden");
+    document.getElementById("walletNoneCard").classList.add("hidden");
+    revealingNewWallet = true;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Generate New Wallet";
+  }
+});
+
+document.getElementById("copyRevealAddressBtn").addEventListener("click", (e) => {
+  copyToClipboard(document.getElementById("revealAddress").textContent, e.target);
+});
+document.getElementById("copyRevealKeyBtn").addEventListener("click", (e) => {
+  copyToClipboard(document.getElementById("revealPrivateKey").textContent, e.target);
+});
+document.getElementById("dismissRevealBtn").addEventListener("click", () => {
+  document.getElementById("revealAddress").textContent = "";
+  document.getElementById("revealPrivateKey").textContent = "";
+  document.getElementById("walletRevealCard").classList.add("hidden");
+  revealingNewWallet = false;
+  refreshWallet();
+});
+
 // ---- Settings ----
 
 const settingsFields = [
@@ -212,6 +290,7 @@ document.getElementById("settingsForm").addEventListener("submit", async (e) => 
 function refreshAll() {
   refreshStatus().catch(() => {});
   refreshHistory().catch(() => {});
+  refreshWallet().catch(() => {});
 }
 
 loadSettings();

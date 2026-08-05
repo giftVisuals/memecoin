@@ -21,6 +21,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="overview" role="tab">Overview</button>
+      <button class="tab" data-tab="wallet" role="tab">Wallet</button>
       <button class="tab" data-tab="settings" role="tab">Settings</button>
       <button class="tab" data-tab="history" role="tab">History</button>
     </nav>
@@ -74,6 +75,63 @@
             </thead>
             <tbody></tbody>
           </table>
+        </div>
+      </section>
+
+      <!-- WALLET -->
+      <section id="wallet" class="panel">
+        <div id="walletNoneCard" class="card hidden">
+          <div class="card-header">
+            <h2>No wallet yet</h2>
+          </div>
+          <p class="card-hint">
+            The bot needs its own Solana wallet to trade with real funds. Generate one below,
+            then copy the private key into Railway's <span class="mono">SOLANA_PRIVATE_KEY</span>
+            variable — that's the only place it's ever stored.
+          </p>
+          <button id="generateWalletBtn" class="btn-primary">Generate New Wallet</button>
+        </div>
+
+        <div id="walletExistingCard" class="card hidden">
+          <div class="card-header">
+            <h2>Bot Wallet</h2>
+          </div>
+          <p class="card-hint">Send SOL here from Phantom (or any wallet) to fund the bot.</p>
+          <div class="address-block">
+            <span id="walletAddress" class="mono address-text"></span>
+            <button id="copyAddressBtn" class="btn-secondary">Copy</button>
+          </div>
+          <div class="wallet-balance-row">
+            <span class="stat-label">On-chain balance</span>
+            <span id="walletBalance" class="stat-value stat-gold">--</span>
+          </div>
+        </div>
+
+        <div id="walletRevealCard" class="card card-warning hidden">
+          <div class="card-header">
+            <h2>Save this now — shown once</h2>
+          </div>
+          <p class="card-hint">
+            This is the only time this private key will ever be shown. Copy it somewhere safe,
+            then paste it into Railway → Variables → <span class="mono">SOLANA_PRIVATE_KEY</span>
+            and redeploy. Generating a new wallet does <strong>not</strong> change which wallet is
+            live until you update that variable yourself.
+          </p>
+          <div class="field">
+            <span>Address</span>
+            <div class="address-block">
+              <span id="revealAddress" class="mono address-text"></span>
+              <button id="copyRevealAddressBtn" class="btn-secondary">Copy</button>
+            </div>
+          </div>
+          <div class="field">
+            <span>Private key</span>
+            <div class="address-block">
+              <span id="revealPrivateKey" class="mono address-text"></span>
+              <button id="copyRevealKeyBtn" class="btn-secondary">Copy</button>
+            </div>
+          </div>
+          <button id="dismissRevealBtn" class="btn-primary">I've saved it</button>
         </div>
       </section>
 
