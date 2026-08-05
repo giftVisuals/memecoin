@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "../config.js";
-import { backupStoreAsync } from "./cloudBackup.js";
+import { backupStore } from "./cloudBackup.js";
+import { logger } from "../notify/logger.js";
 
 const filePath = path.join(config.dataDir, "store.json");
 const PRIMARY = "primary";
@@ -35,11 +36,17 @@ function load() {
   return data;
 }
 
-function save(data) {
+// Awaited by every write below, same reasoning as walletStore.js: a redeploy
+// landing between "saved locally" and "backup finished" would otherwise lose
+// the trade/balance change entirely.
+async function save(data) {
   ensureDataDir();
   const content = JSON.stringify(data, null, 2);
   fs.writeFileSync(filePath, content);
-  backupStoreAsync(content);
+  const backedUp = await backupStore(content);
+  if (!backedUp) {
+    logger.error("Trade/balance change saved locally but NOT backed up to the cloud.");
+  }
 }
 
 function walletIdOf(trade) {
@@ -52,16 +59,16 @@ export const store = {
     return data.paperBalances[walletId] ?? config.bankroll.startingPaperBalanceSol;
   },
 
-  setPaperBalance(walletId, balance) {
+  async setPaperBalance(walletId, balance) {
     const data = load();
     data.paperBalances[walletId] = balance;
-    save(data);
+    await save(data);
   },
 
-  recordTrade(trade) {
+  async recordTrade(trade) {
     const data = load();
     data.trades.push(trade);
-    save(data);
+    await save(data);
   },
 
   getTrades(walletId) {

@@ -21,8 +21,8 @@ export class PaperBroker {
     const effectivePrice = priceSol * (1 + SIMULATED_SLIPPAGE_PCT / 100);
     const amountTokens = solAmount / effectivePrice;
 
-    store.setPaperBalance(this.walletId, balance - solAmount);
-    store.recordTrade({
+    await store.setPaperBalance(this.walletId, balance - solAmount);
+    await store.recordTrade({
       id: crypto.randomUUID(),
       walletId: this.walletId,
       mint,
@@ -44,8 +44,8 @@ export class PaperBroker {
     const amountSolReceived = amountTokens * effectivePrice;
 
     const balance = store.getPaperBalance(this.walletId);
-    store.setPaperBalance(this.walletId, balance + amountSolReceived);
-    store.recordTrade({
+    await store.setPaperBalance(this.walletId, balance + amountSolReceived);
+    await store.recordTrade({
       id: crypto.randomUUID(),
       walletId: this.walletId,
       mint,

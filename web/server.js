@@ -39,9 +39,9 @@ export function startDashboardServer(engine) {
     res.json(getSettings());
   });
 
-  app.put("/api/settings", (req, res) => {
+  app.put("/api/settings", async (req, res) => {
     try {
-      const updated = updateSettings(req.body ?? {});
+      const updated = await updateSettings(req.body ?? {});
       res.json(updated);
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -92,20 +92,20 @@ export function startDashboardServer(engine) {
     res.json(withBalances);
   });
 
-  app.post("/api/wallets", (req, res) => {
+  app.post("/api/wallets", async (req, res) => {
     try {
-      const created = walletStore.addWallet(req.body?.name);
+      const created = await walletStore.addWallet(req.body?.name);
       res.json(created);
     } catch (err) {
       res.status(400).json({ error: err.message });
     }
   });
 
-  app.put("/api/wallets/:id", (req, res) => {
+  app.put("/api/wallets/:id", async (req, res) => {
     try {
       let wallet;
-      if (req.body?.paused !== undefined) wallet = walletStore.setPaused(req.params.id, req.body.paused);
-      if (req.body?.name !== undefined) wallet = walletStore.setName(req.params.id, req.body.name);
+      if (req.body?.paused !== undefined) wallet = await walletStore.setPaused(req.params.id, req.body.paused);
+      if (req.body?.name !== undefined) wallet = await walletStore.setName(req.params.id, req.body.name);
       if (!wallet) return res.status(400).json({ error: "Nothing to update" });
       const { encryptedSecretKey, ...safe } = wallet;
       res.json(safe);
@@ -114,13 +114,13 @@ export function startDashboardServer(engine) {
     }
   });
 
-  app.delete("/api/wallets/:id", (req, res) => {
+  app.delete("/api/wallets/:id", async (req, res) => {
     if (engine.hasOpenPositions(req.params.id)) {
       res.status(400).json({ error: "Can't remove a wallet with open positions - wait for them to close first." });
       return;
     }
     try {
-      walletStore.removeWallet(req.params.id);
+      await walletStore.removeWallet(req.params.id);
       res.json({ ok: true });
     } catch (err) {
       res.status(400).json({ error: err.message });

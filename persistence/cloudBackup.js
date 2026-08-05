@@ -60,25 +60,32 @@ export async function restoreFromCloud() {
   }
 }
 
-// Fire-and-forget - called after every local write so the cloud copy never
-// falls far behind, without making trade/settings/wallet writes wait on a
-// network round trip. Wallet contents are already encrypted before this is
-// called (see walletCrypto.js) - Upstash only ever sees ciphertext.
-export function backupStoreAsync(content) {
-  if (!enabled) return;
-  upstashSet(STORE_KEY, content).catch((err) => logger.error(`Cloud backup (store) failed: ${err.message}`));
+// These are awaited by their callers (store.js/settings.js/walletStore.js)
+// before an add/remove/update reports success - otherwise a redeploy that
+// lands in the gap between "saved locally" and "backup finished" would lose
+// the change entirely, since the fresh container only has the cloud copy to
+// restore from. Never throws - returns false on failure so the caller can
+// decide whether to warn, but the local write (which already happened)
+// stays valid for as long as this container is alive either way.
+async function backup(key, content, label) {
+  if (!enabled) return true;
+  try {
+    await upstashSet(key, content);
+    return true;
+  } catch (err) {
+    logger.error(`Cloud backup (${label}) failed: ${err.message}`);
+    return false;
+  }
 }
 
-export function backupSettingsAsync(content) {
-  if (!enabled) return;
-  upstashSet(SETTINGS_KEY, content).catch((err) =>
-    logger.error(`Cloud backup (settings) failed: ${err.message}`)
-  );
+export function backupStore(content) {
+  return backup(STORE_KEY, content, "store");
 }
 
-export function backupWalletsAsync(content) {
-  if (!enabled) return;
-  upstashSet(WALLETS_KEY, content).catch((err) =>
-    logger.error(`Cloud backup (wallets) failed: ${err.message}`)
-  );
+export function backupSettings(content) {
+  return backup(SETTINGS_KEY, content, "settings");
+}
+
+export function backupWallets(content) {
+  return backup(WALLETS_KEY, content, "wallets");
 }

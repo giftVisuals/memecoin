@@ -67,7 +67,7 @@ export class LiveBroker {
     const decimals = mintInfo?.decimals ?? 6;
     const amountTokens = Number(quote.outAmount) / 10 ** decimals;
 
-    store.recordTrade({
+    await store.recordTrade({
       id: crypto.randomUUID(),
       walletId: this.walletId,
       mint,
@@ -95,7 +95,7 @@ export class LiveBroker {
 
     const amountSolReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
-    store.recordTrade({
+    await store.recordTrade({
       id: crypto.randomUUID(),
       walletId: this.walletId,
       mint,

@@ -5,7 +5,8 @@ import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
 import { config } from "../config.js";
 import { encryptSecret, decryptSecret } from "./walletCrypto.js";
-import { backupWalletsAsync } from "./cloudBackup.js";
+import { backupWallets } from "./cloudBackup.js";
+import { logger } from "../notify/logger.js";
 
 const filePath = path.join(config.dataDir, "wallets.json");
 
@@ -26,12 +27,23 @@ function load() {
   return cache;
 }
 
-function save(wallets) {
+// Awaited by every write below - by the time addWallet/removeWallet/etc.
+// return, the cloud copy is either confirmed saved or we've logged loudly
+// that it wasn't. Without this, a redeploy landing right after a wallet was
+// added (before a fire-and-forget backup finished) could lose it entirely.
+async function save(wallets) {
   ensureDataDir();
   const content = JSON.stringify(wallets, null, 2);
   fs.writeFileSync(filePath, content);
-  backupWalletsAsync(content);
   cache = wallets;
+  const backedUp = await backupWallets(content);
+  if (!backedUp) {
+    logger.error(
+      "Wallet change saved locally but NOT backed up to the cloud - it will be lost if this " +
+        "container redeploys or restarts before the next successful backup."
+    );
+  }
+  return backedUp;
 }
 
 // Additional trading wallets beyond the primary one (which still comes from
@@ -55,7 +67,7 @@ export const walletStore = {
   // Generates a brand new keypair, stores it encrypted, and returns the
   // secret key exactly once so the caller can show it to the user as a
   // personal backup. It is never returned again after this call.
-  addWallet(name) {
+  async addWallet(name) {
     const keypair = Keypair.generate();
     const address = keypair.publicKey.toBase58();
     const privateKeyBase58 = bs58.encode(keypair.secretKey);
@@ -71,33 +83,33 @@ export const walletStore = {
 
     const wallets = load();
     wallets.push(record);
-    save(wallets);
+    const backedUp = await save(wallets);
 
-    return { id: record.id, name: record.name, address, privateKeyBase58 };
+    return { id: record.id, name: record.name, address, privateKeyBase58, backedUp };
   },
 
-  removeWallet(id) {
+  async removeWallet(id) {
     const wallets = load();
     const next = wallets.filter((w) => w.id !== id);
     if (next.length === wallets.length) throw new Error("Wallet not found");
-    save(next);
+    await save(next);
   },
 
-  setPaused(id, paused) {
+  async setPaused(id, paused) {
     const wallets = load();
     const wallet = wallets.find((w) => w.id === id);
     if (!wallet) throw new Error("Wallet not found");
     wallet.paused = Boolean(paused);
-    save(wallets);
+    await save(wallets);
     return wallet;
   },
 
-  setName(id, name) {
+  async setName(id, name) {
     const wallets = load();
     const wallet = wallets.find((w) => w.id === id);
     if (!wallet) throw new Error("Wallet not found");
     wallet.name = (name ?? "").trim() || wallet.name;
-    save(wallets);
+    await save(wallets);
     return wallet;
   },
 

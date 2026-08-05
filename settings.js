@@ -1,7 +1,8 @@
 import fs from "node:fs";
 import path from "node:path";
 import { config } from "./config.js";
-import { backupSettingsAsync } from "./persistence/cloudBackup.js";
+import { backupSettings } from "./persistence/cloudBackup.js";
+import { logger } from "./notify/logger.js";
 
 const filePath = path.join(config.dataDir, "settings.json");
 
@@ -95,7 +96,12 @@ function load() {
     cache = readFromEnvDefaults();
     const content = JSON.stringify(cache, null, 2);
     fs.writeFileSync(filePath, content);
-    backupSettingsAsync(content);
+    // Fire-and-forget is acceptable only here: load() must stay synchronous
+    // (called everywhere via getSettings()), and this first-ever-boot seed
+    // is just the .env defaults, not a deliberate user change - low stakes
+    // if a redeploy races it. updateSettings() below awaits properly since
+    // that's a real user action that shouldn't be able to silently vanish.
+    backupSettings(content); // fire-and-forget - never rejects, just logs on failure
     return cache;
   }
   cache = { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(filePath, "utf-8")) };
@@ -124,7 +130,9 @@ export function getSettings() {
 
 // Validates and merges a partial update, persists it, and returns the new
 // settings. Throws on bad input so the API layer can turn that into a 400.
-export function updateSettings(partial) {
+// Awaits the cloud backup - a deliberate settings change from the dashboard
+// shouldn't be able to silently vanish on the next redeploy.
+export async function updateSettings(partial) {
   const current = load();
   const next = { ...current };
 
@@ -157,7 +165,10 @@ export function updateSettings(partial) {
   ensureDataDir();
   const content = JSON.stringify(next, null, 2);
   fs.writeFileSync(filePath, content);
-  backupSettingsAsync(content);
   cache = next;
+  const backedUp = await backupSettings(content);
+  if (!backedUp) {
+    logger.error("Settings change saved locally but NOT backed up to the cloud.");
+  }
   return next;
 }
