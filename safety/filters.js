@@ -46,5 +46,7 @@ export async function runSafetyFilters(mint, pair, ageSec) {
     }
   }
 
-  return { passed: reasons.length === 0, reasons };
+  // Returned so callers (the honeypot check needs decimals) can reuse this
+  // instead of fetching the same mint account from the RPC a second time.
+  return { passed: reasons.length === 0, reasons, mintInfo };
 }

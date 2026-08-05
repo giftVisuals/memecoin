@@ -6,7 +6,6 @@ import { fetchPairData } from "../sources/dexscreener.js";
 import { isWatchlisted } from "../sources/watchlist.js";
 import { runSafetyFilters } from "../safety/filters.js";
 import { checkSellable } from "../safety/honeypot.js";
-import { getMintInfo } from "../solanaConnection.js";
 import { requireWallet } from "../wallet.js";
 import { walletStore } from "../persistence/walletStore.js";
 import { store } from "../persistence/store.js";
@@ -201,8 +200,7 @@ export class TradingEngine {
       return;
     }
 
-    const mintInfo = await getMintInfo(event.mint);
-    const decimals = mintInfo?.decimals ?? 6;
+    const decimals = filterResult.mintInfo?.decimals ?? 6;
     const honeypotCheck = await checkSellable(event.mint, decimals);
     if (!honeypotCheck.sellable) {
       this.pending.delete(event.mint);
