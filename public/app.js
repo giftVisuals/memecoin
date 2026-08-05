@@ -20,6 +20,27 @@ function pnlClass(n) {
   return Number(n) > 0 ? "stat-positive" : Number(n) < 0 ? "stat-negative" : "";
 }
 
+function escapeHtml(str) {
+  const div = document.createElement("div");
+  div.textContent = str ?? "";
+  return div.innerHTML;
+}
+
+async function copyToClipboard(text, button) {
+  try {
+    await navigator.clipboard.writeText(text);
+    const original = button.textContent;
+    button.textContent = "Copied";
+    button.classList.add("copied");
+    setTimeout(() => {
+      button.textContent = original;
+      button.classList.remove("copied");
+    }, 1500);
+  } catch {
+    // Clipboard API unavailable (e.g. non-HTTPS) - nothing to fall back to safely.
+  }
+}
+
 // ---- Tabs ----
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -31,7 +52,7 @@ document.querySelectorAll(".tab").forEach((tab) => {
   });
 });
 
-// ---- Overview ----
+// ---- Overview (family-wide totals) ----
 
 async function refreshStatus() {
   const res = await fetch("/api/status");
@@ -42,22 +63,10 @@ async function refreshStatus() {
   modeBadge.textContent = data.mode.toUpperCase();
   modeBadge.className = `badge ${data.mode === "live" ? "badge-live" : "badge-paper"}`;
 
-  document.getElementById("balanceBadge").textContent = `${Number(data.balanceSol).toFixed(4)} SOL`;
+  const totalBalance = data.accounts.reduce((sum, a) => sum + (a.balanceSol ?? 0), 0);
+  document.getElementById("balanceBadge").textContent = `${totalBalance.toFixed(4)} SOL`;
 
-  const pauseCard = document.getElementById("pauseCard");
-  const pauseLabel = document.getElementById("pauseStatusLabel");
-  const pauseBtn = document.getElementById("pauseToggleBtn");
-  if (data.tradingPaused) {
-    pauseCard.classList.add("paused");
-    pauseLabel.textContent = "Trading Paused";
-    pauseBtn.textContent = "Resume Trading";
-  } else {
-    pauseCard.classList.remove("paused");
-    pauseLabel.textContent = "Trading Active";
-    pauseBtn.textContent = "Pause Trading";
-  }
-
-  const stats = data.stats;
+  const stats = data.familyStats;
   const netPnlEl = document.getElementById("statNetPnl");
   netPnlEl.textContent = formatSol(stats.netPnlSol);
   netPnlEl.className = `stat-value ${pnlClass(stats.netPnlSol)}`;
@@ -66,14 +75,23 @@ async function refreshStatus() {
   document.getElementById("statLost").textContent = `-${Number(stats.totalLostSol).toFixed(4)} SOL`;
   document.getElementById("statTokensTraded").textContent = stats.tokensTraded;
   document.getElementById("statWinRate").textContent = `${stats.winRate.toFixed(0)}%`;
-  document.getElementById("statBalance").textContent = `${Number(data.balanceSol).toFixed(4)} SOL`;
+  document.getElementById("statBalance").textContent = `${totalBalance.toFixed(4)} SOL`;
+
+  renderOpenPositions(data.accounts);
+  updatePrimaryPauseUi(data.accounts.find((a) => a.id === "primary"));
+}
+
+function renderOpenPositions(accounts) {
+  const rows = accounts.flatMap((account) =>
+    account.openPositions.map((p) => ({ ...p, walletName: account.name }))
+  );
 
   const tbody = document.querySelector("#openPositionsTable tbody");
   const empty = document.getElementById("openPositionsEmpty");
   const table = document.getElementById("openPositionsTable");
-  document.getElementById("openPositionsCount").textContent = data.openPositions.length;
+  document.getElementById("openPositionsCount").textContent = rows.length;
 
-  if (data.openPositions.length === 0) {
+  if (rows.length === 0) {
     empty.classList.remove("hidden");
     table.classList.add("hidden");
     return;
@@ -81,7 +99,7 @@ async function refreshStatus() {
   empty.classList.add("hidden");
   table.classList.remove("hidden");
 
-  tbody.innerHTML = data.openPositions
+  tbody.innerHTML = rows
     .map(
       (p) => `
       <tr>
@@ -95,11 +113,11 @@ async function refreshStatus() {
             </div>
           </div>
         </td>
+        <td>${escapeHtml(p.walletName)}</td>
         <td class="mono">${Number(p.entryPriceSol).toFixed(8)}</td>
         <td class="mono">${Number(p.lastPriceSol).toFixed(8)}</td>
         <td class="mono ${pnlClass(p.pnlPct)}">${formatPct(p.pnlPct)}</td>
         <td class="mono">${Number(p.amountSolSpent).toFixed(4)}</td>
-        <td></td>
       </tr>`
     )
     .join("");
@@ -142,17 +160,29 @@ async function refreshHistory() {
     .join("");
 }
 
-function escapeHtml(str) {
-  const div = document.createElement("div");
-  div.textContent = str ?? "";
-  return div.innerHTML;
+// ---- Primary wallet (from SOLANA_PRIVATE_KEY) ----
+
+let revealingNewWallet = false;
+
+function updatePrimaryPauseUi(primaryAccount) {
+  const badge = document.getElementById("primaryPauseBadge");
+  const btn = document.getElementById("primaryPauseToggleBtn");
+  if (!primaryAccount) return;
+
+  if (primaryAccount.paused) {
+    badge.textContent = "Paused";
+    badge.className = "badge badge-paused";
+    btn.textContent = "Resume Trading";
+  } else {
+    badge.textContent = "Active";
+    badge.className = "badge badge-active";
+    btn.textContent = "Pause Trading";
+  }
 }
 
-// ---- Pause / kill switch ----
-
-document.getElementById("pauseToggleBtn").addEventListener("click", async () => {
-  const btn = document.getElementById("pauseToggleBtn");
-  const currentlyPaused = document.getElementById("pauseCard").classList.contains("paused");
+document.getElementById("primaryPauseToggleBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("primaryPauseToggleBtn");
+  const currentlyPaused = document.getElementById("primaryPauseBadge").textContent === "Paused";
   btn.disabled = true;
   try {
     await fetch("/api/settings", {
@@ -166,26 +196,7 @@ document.getElementById("pauseToggleBtn").addEventListener("click", async () => 
   }
 });
 
-// ---- Wallet ----
-
-async function copyToClipboard(text, button) {
-  try {
-    await navigator.clipboard.writeText(text);
-    const original = button.textContent;
-    button.textContent = "Copied";
-    button.classList.add("copied");
-    setTimeout(() => {
-      button.textContent = original;
-      button.classList.remove("copied");
-    }, 1500);
-  } catch {
-    // Clipboard API unavailable (e.g. non-HTTPS) - nothing to fall back to safely.
-  }
-}
-
-let revealingNewWallet = false;
-
-async function refreshWallet() {
+async function refreshPrimaryWallet() {
   if (revealingNewWallet) return; // don't clobber the one-time key reveal mid-poll
 
   const res = await fetch("/api/wallet");
@@ -212,6 +223,14 @@ document.getElementById("copyAddressBtn").addEventListener("click", (e) => {
   copyToClipboard(document.getElementById("walletAddress").textContent, e.target);
 });
 
+function showReveal(hint, address, privateKeyBase58) {
+  document.getElementById("revealHint").textContent = hint;
+  document.getElementById("revealAddress").textContent = address;
+  document.getElementById("revealPrivateKey").textContent = privateKeyBase58;
+  document.getElementById("walletRevealCard").classList.remove("hidden");
+  revealingNewWallet = true;
+}
+
 document.getElementById("generateWalletBtn").addEventListener("click", async () => {
   const btn = document.getElementById("generateWalletBtn");
   btn.disabled = true;
@@ -219,11 +238,14 @@ document.getElementById("generateWalletBtn").addEventListener("click", async () 
   try {
     const res = await fetch("/api/wallet/generate", { method: "POST" });
     const data = await res.json();
-    document.getElementById("revealAddress").textContent = data.address;
-    document.getElementById("revealPrivateKey").textContent = data.privateKeyBase58;
-    document.getElementById("walletRevealCard").classList.remove("hidden");
     document.getElementById("walletNoneCard").classList.add("hidden");
-    revealingNewWallet = true;
+    showReveal(
+      "This is the only time this private key will ever be shown. Copy it somewhere safe, " +
+        "then paste it into Railway → Variables → SOLANA_PRIVATE_KEY and redeploy. Generating " +
+        "a new wallet does not change which wallet is live until you update that variable yourself.",
+      data.address,
+      data.privateKeyBase58
+    );
   } finally {
     btn.disabled = false;
     btn.textContent = "Generate New Wallet";
@@ -241,7 +263,137 @@ document.getElementById("dismissRevealBtn").addEventListener("click", () => {
   document.getElementById("revealPrivateKey").textContent = "";
   document.getElementById("walletRevealCard").classList.add("hidden");
   revealingNewWallet = false;
-  refreshWallet();
+  refreshPrimaryWallet();
+  refreshFamilyWallets();
+});
+
+// ---- Family wallets (added from the dashboard) ----
+
+async function refreshFamilyWallets() {
+  if (revealingNewWallet) return;
+
+  const res = await fetch("/api/wallets");
+  if (!res.ok) return;
+  const wallets = await res.json();
+
+  document.getElementById("familyWalletsCount").textContent = wallets.length;
+  const list = document.getElementById("familyWalletsList");
+  const empty = document.getElementById("familyWalletsEmpty");
+
+  if (wallets.length === 0) {
+    empty.classList.remove("hidden");
+    list.innerHTML = "";
+    return;
+  }
+  empty.classList.add("hidden");
+
+  list.innerHTML = wallets
+    .map(
+      (w) => `
+      <div class="wallet-item">
+        <div class="wallet-item-top">
+          <span class="wallet-item-name">${escapeHtml(w.name)}</span>
+          <span class="wallet-item-balance">${
+            w.balanceSol === null ? "unavailable" : `${Number(w.balanceSol).toFixed(4)} SOL`
+          }</span>
+        </div>
+        <div class="wallet-item-address">${w.address}</div>
+        <div class="wallet-item-actions">
+          <button class="btn-secondary" data-action="toggle-pause" data-id="${w.id}" data-paused="${w.paused}">
+            ${w.paused ? "Resume" : "Pause"}
+          </button>
+          <button class="btn-secondary btn-danger" data-action="remove" data-id="${w.id}" data-name="${escapeHtml(w.name)}">
+            Remove
+          </button>
+        </div>
+      </div>`
+    )
+    .join("");
+}
+
+document.getElementById("familyWalletsList").addEventListener("click", async (e) => {
+  const btn = e.target.closest("button[data-action]");
+  if (!btn) return;
+  const { action, id } = btn.dataset;
+
+  if (action === "toggle-pause") {
+    const nextPaused = btn.dataset.paused !== "true";
+    btn.disabled = true;
+    try {
+      await fetch(`/api/wallets/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ paused: nextPaused }),
+      });
+      await refreshFamilyWallets();
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  if (action === "remove") {
+    if (!confirm(`Remove ${btn.dataset.name}'s wallet? This can't be undone from here.`)) return;
+    btn.disabled = true;
+    try {
+      const res = await fetch(`/api/wallets/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        alert(body.error || "Failed to remove wallet.");
+      }
+      await refreshFamilyWallets();
+    } finally {
+      btn.disabled = false;
+    }
+  }
+});
+
+document.getElementById("showAddWalletBtn").addEventListener("click", () => {
+  document.getElementById("addWalletForm").classList.remove("hidden");
+  document.getElementById("showAddWalletBtn").classList.add("hidden");
+  document.getElementById("newWalletName").focus();
+});
+
+document.getElementById("cancelAddWalletBtn").addEventListener("click", () => {
+  document.getElementById("addWalletForm").classList.add("hidden");
+  document.getElementById("showAddWalletBtn").classList.remove("hidden");
+  document.getElementById("newWalletName").value = "";
+});
+
+document.getElementById("confirmAddWalletBtn").addEventListener("click", async () => {
+  const nameInput = document.getElementById("newWalletName");
+  const name = nameInput.value.trim();
+  if (!name) {
+    nameInput.focus();
+    return;
+  }
+
+  const btn = document.getElementById("confirmAddWalletBtn");
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/wallets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      alert(body.error || "Failed to create wallet.");
+      return;
+    }
+    const data = await res.json();
+    nameInput.value = "";
+    document.getElementById("addWalletForm").classList.add("hidden");
+    document.getElementById("showAddWalletBtn").classList.remove("hidden");
+    showReveal(
+      `This wallet is already saved (encrypted) so the bot can trade with it automatically - ` +
+        `it starts paused, so switch it on from the Family Wallets list when you're ready. This ` +
+        `key is shown once, as your own personal backup outside the bot.`,
+      data.address,
+      data.privateKeyBase58
+    );
+  } finally {
+    btn.disabled = false;
+  }
 });
 
 // ---- Settings ----
@@ -268,6 +420,7 @@ async function loadSettings() {
   const settings = await res.json();
 
   document.getElementById("watchlistKeywords").value = settings.watchlistKeywords.join(", ");
+  document.getElementById("primaryWalletName").textContent = settings.primaryWalletName || "Main";
   for (const key of settingsFields) {
     const el = document.getElementById(key);
     if (el) el.value = settings[key];
@@ -321,7 +474,8 @@ document.getElementById("settingsForm").addEventListener("submit", async (e) => 
 function refreshAll() {
   refreshStatus().catch(() => {});
   refreshHistory().catch(() => {});
-  refreshWallet().catch(() => {});
+  refreshPrimaryWallet().catch(() => {});
+  refreshFamilyWallets().catch(() => {});
 }
 
 loadSettings();

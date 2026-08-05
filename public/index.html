@@ -21,7 +21,7 @@
 
     <nav class="tabs" role="tablist">
       <button class="tab active" data-tab="overview" role="tab">Overview</button>
-      <button class="tab" data-tab="wallet" role="tab">Wallet</button>
+      <button class="tab" data-tab="wallets" role="tab">Wallets</button>
       <button class="tab" data-tab="settings" role="tab">Settings</button>
       <button class="tab" data-tab="history" role="tab">History</button>
     </nav>
@@ -29,15 +29,7 @@
     <main>
       <!-- OVERVIEW -->
       <section id="overview" class="panel active">
-        <div id="pauseCard" class="card pause-card">
-          <div class="pause-row">
-            <div>
-              <span id="pauseStatusLabel" class="pause-status-label">Trading Active</span>
-              <p class="card-hint pause-hint">Bot is scanning and buying normally.</p>
-            </div>
-            <button id="pauseToggleBtn" class="btn-primary">Pause Trading</button>
-          </div>
-        </div>
+        <p class="card-hint family-hint">Combined totals across every wallet. Manage individual wallets on the Wallets tab.</p>
 
         <div class="stat-grid">
           <div class="stat-card">
@@ -76,11 +68,11 @@
             <thead>
               <tr>
                 <th>Token</th>
+                <th>Wallet</th>
                 <th>Entry</th>
                 <th>Last</th>
                 <th>PnL</th>
                 <th>Spent</th>
-                <th></th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -88,11 +80,11 @@
         </div>
       </section>
 
-      <!-- WALLET -->
-      <section id="wallet" class="panel">
+      <!-- WALLETS -->
+      <section id="wallets" class="panel">
         <div id="walletNoneCard" class="card hidden">
           <div class="card-header">
-            <h2>No wallet yet</h2>
+            <h2>No main wallet yet</h2>
           </div>
           <p class="card-hint">
             The bot needs its own Solana wallet to trade with real funds. Generate one below,
@@ -104,9 +96,10 @@
 
         <div id="walletExistingCard" class="card hidden">
           <div class="card-header">
-            <h2>Bot Wallet</h2>
+            <h2 id="primaryWalletName">Main</h2>
+            <span id="primaryPauseBadge" class="badge badge-muted">--</span>
           </div>
-          <p class="card-hint">Send SOL here from Phantom (or any wallet) to fund the bot.</p>
+          <p class="card-hint">Send SOL here from Phantom (or any wallet) to fund this wallet.</p>
           <div class="address-block">
             <span id="walletAddress" class="mono address-text"></span>
             <button id="copyAddressBtn" class="btn-secondary">Copy</button>
@@ -115,18 +108,37 @@
             <span class="stat-label">On-chain balance</span>
             <span id="walletBalance" class="stat-value stat-gold">--</span>
           </div>
+          <div class="wallet-actions-row">
+            <button id="primaryPauseToggleBtn" class="btn-secondary">Pause Trading</button>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <h2>Family Wallets</h2>
+            <span id="familyWalletsCount" class="pill">0</span>
+          </div>
+          <p class="card-hint">
+            Each wallet trades the same shared strategy but with its own funds, its own PnL, and
+            its own pause switch.
+          </p>
+
+          <div id="familyWalletsEmpty" class="empty-state">No family wallets added yet.</div>
+          <div id="familyWalletsList" class="wallet-card-list"></div>
+
+          <div id="addWalletForm" class="add-wallet-form hidden">
+            <input type="text" id="newWalletName" class="mono" placeholder="Name (e.g. Chidi)" />
+            <button id="confirmAddWalletBtn" class="btn-primary">Create</button>
+            <button id="cancelAddWalletBtn" class="btn-secondary">Cancel</button>
+          </div>
+          <button id="showAddWalletBtn" class="btn-primary add-wallet-btn">+ Add Wallet</button>
         </div>
 
         <div id="walletRevealCard" class="card card-warning hidden">
           <div class="card-header">
             <h2>Save this now — shown once</h2>
           </div>
-          <p class="card-hint">
-            This is the only time this private key will ever be shown. Copy it somewhere safe,
-            then paste it into Railway → Variables → <span class="mono">SOLANA_PRIVATE_KEY</span>
-            and redeploy. Generating a new wallet does <strong>not</strong> change which wallet is
-            live until you update that variable yourself.
-          </p>
+          <p id="revealHint" class="card-hint"></p>
           <div class="field">
             <span>Address</span>
             <div class="address-block">

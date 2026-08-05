@@ -59,6 +59,11 @@ export const config = {
   port: num("PORT", 3000),
   dashboardPassword: str("DASHBOARD_PASSWORD", ""),
 
+  // Required to add wallets from the dashboard (each one's private key is
+  // encrypted at rest with this before being stored). Any long random
+  // string works - set once in Railway, never committed.
+  walletEncryptionKey: str("WALLET_ENCRYPTION_KEY", ""),
+
   // Optional: free Upstash Redis REST API, used to back up trade history and
   // settings so they survive a redeploy without needing a Railway Volume.
   // Both unset = feature is simply off, everything else behaves as before.

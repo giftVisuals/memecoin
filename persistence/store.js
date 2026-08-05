@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { backupStoreAsync } from "./cloudBackup.js";
 
 const filePath = path.join(config.dataDir, "store.json");
+const PRIMARY = "primary";
 
 function ensureDataDir() {
   fs.mkdirSync(config.dataDir, { recursive: true });
@@ -13,13 +14,25 @@ function load() {
   ensureDataDir();
   if (!fs.existsSync(filePath)) {
     const initial = {
-      paperBalanceSol: config.bankroll.startingPaperBalanceSol,
+      paperBalances: { [PRIMARY]: config.bankroll.startingPaperBalanceSol },
       trades: [],
     };
     fs.writeFileSync(filePath, JSON.stringify(initial, null, 2));
     return initial;
   }
-  return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+
+  // Migrate the pre-multi-wallet shape ({ paperBalanceSol, trades }) in
+  // place - older trades with no walletId are treated as the primary
+  // wallet's, both here and everywhere else that reads trade.walletId.
+  if (data.paperBalanceSol !== undefined && !data.paperBalances) {
+    data.paperBalances = { [PRIMARY]: data.paperBalanceSol };
+    delete data.paperBalanceSol;
+  }
+  if (!data.paperBalances) data.paperBalances = {};
+
+  return data;
 }
 
 function save(data) {
@@ -29,14 +42,19 @@ function save(data) {
   backupStoreAsync(content);
 }
 
+function walletIdOf(trade) {
+  return trade.walletId || PRIMARY;
+}
+
 export const store = {
-  getPaperBalance() {
-    return load().paperBalanceSol;
+  getPaperBalance(walletId = PRIMARY) {
+    const data = load();
+    return data.paperBalances[walletId] ?? config.bankroll.startingPaperBalanceSol;
   },
 
-  setPaperBalance(balance) {
+  setPaperBalance(walletId, balance) {
     const data = load();
-    data.paperBalanceSol = balance;
+    data.paperBalances[walletId] = balance;
     save(data);
   },
 
@@ -46,56 +64,74 @@ export const store = {
     save(data);
   },
 
-  getTrades() {
-    return load().trades;
+  getTrades(walletId) {
+    const trades = load().trades;
+    return walletId ? trades.filter((t) => walletIdOf(t) === walletId) : trades;
   },
 
-  // Pairs each sell with the buy that opened it (one open position per mint
-  // at a time, so a simple last-buy-per-mint pairing is correct here) and
-  // rolls that up into the numbers the dashboard home page shows.
-  getStats() {
-    const trades = [...load().trades].sort(
-      (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
-    );
+  // Pairs each sell with the buy that opened it. Pairing happens per wallet
+  // even when computing family-wide totals - two wallets independently
+  // holding the same mint must never have their buys/sells cross-matched.
+  getStats(walletId) {
+    const allTrades = load().trades;
+    const relevant = walletId ? allTrades.filter((t) => walletIdOf(t) === walletId) : allTrades;
 
-    const openBuys = new Map();
+    const byWallet = new Map();
+    for (const trade of relevant) {
+      const key = walletIdOf(trade);
+      if (!byWallet.has(key)) byWallet.set(key, []);
+      byWallet.get(key).push(trade);
+    }
+
+    let totalEarnedSol = 0;
+    let totalLostSol = 0;
+    let closedCount = 0;
+    let winCount = 0;
+    const tokensTradedSet = new Set();
     const closedTrades = [];
 
-    for (const trade of trades) {
-      if (trade.side === "buy") {
-        openBuys.set(trade.mint, trade);
-      } else if (trade.side === "sell") {
-        const buy = openBuys.get(trade.mint);
-        if (buy) {
-          closedTrades.push({
-            mint: trade.mint,
-            symbol: trade.symbol,
-            pnlSol: trade.amountSol - buy.amountSol,
-            closedAt: trade.timestamp,
-          });
-          openBuys.delete(trade.mint);
+    for (const trades of byWallet.values()) {
+      const sorted = [...trades].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+      const openBuys = new Map();
+
+      for (const trade of sorted) {
+        if (trade.side === "buy") {
+          openBuys.set(trade.mint, trade);
+          tokensTradedSet.add(trade.mint);
+        } else if (trade.side === "sell") {
+          const buy = openBuys.get(trade.mint);
+          if (buy) {
+            const pnlSol = trade.amountSol - buy.amountSol;
+            closedCount++;
+            if (pnlSol > 0) {
+              totalEarnedSol += pnlSol;
+              winCount++;
+            } else if (pnlSol < 0) {
+              totalLostSol += Math.abs(pnlSol);
+            }
+            closedTrades.push({
+              mint: trade.mint,
+              symbol: trade.symbol,
+              walletId: walletIdOf(trade),
+              pnlSol,
+              closedAt: trade.timestamp,
+            });
+            openBuys.delete(trade.mint);
+          }
         }
       }
     }
 
-    const totalEarnedSol = closedTrades
-      .filter((t) => t.pnlSol > 0)
-      .reduce((sum, t) => sum + t.pnlSol, 0);
-    const totalLostSol = closedTrades
-      .filter((t) => t.pnlSol < 0)
-      .reduce((sum, t) => sum + Math.abs(t.pnlSol), 0);
-    const uniqueMintsBought = new Set(trades.filter((t) => t.side === "buy").map((t) => t.mint)).size;
+    closedTrades.sort((a, b) => new Date(b.closedAt) - new Date(a.closedAt));
 
     return {
-      tokensTraded: uniqueMintsBought,
-      closedTrades: closedTrades.length,
-      winRate: closedTrades.length
-        ? (closedTrades.filter((t) => t.pnlSol > 0).length / closedTrades.length) * 100
-        : 0,
+      tokensTraded: tokensTradedSet.size,
+      closedTrades: closedCount,
+      winRate: closedCount ? (winCount / closedCount) * 100 : 0,
       totalEarnedSol,
       totalLostSol,
       netPnlSol: totalEarnedSol - totalLostSol,
-      recentClosedTrades: closedTrades.slice(-20).reverse(),
+      recentClosedTrades: closedTrades.slice(0, 20),
     };
   },
 };

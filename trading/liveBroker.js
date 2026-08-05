@@ -1,6 +1,5 @@
 import { VersionedTransaction } from "@solana/web3.js";
 import { connection, getMintInfo } from "../solanaConnection.js";
-import { requireWallet } from "../wallet.js";
 import { store } from "../persistence/store.js";
 import { SOL_MINT, LAMPORTS_PER_SOL } from "../constants.js";
 
@@ -20,15 +19,13 @@ async function getQuote(inputMint, outputMint, amountRaw) {
   return res.json();
 }
 
-async function executeSwap(quote, userPublicKey) {
-  const wallet = requireWallet();
-
+async function executeSwap(quote, keypair) {
   const res = await fetch(JUPITER_SWAP_URL, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       quoteResponse: quote,
-      userPublicKey,
+      userPublicKey: keypair.publicKey.toBase58(),
       wrapAndUnwrapSol: true,
       prioritizationFeeLamports: "auto",
     }),
@@ -37,7 +34,7 @@ async function executeSwap(quote, userPublicKey) {
 
   const { swapTransaction } = await res.json();
   const tx = VersionedTransaction.deserialize(Buffer.from(swapTransaction, "base64"));
-  tx.sign([wallet]);
+  tx.sign([keypair]);
 
   const signature = await connection.sendRawTransaction(tx.serialize(), { skipPreflight: false });
   const latestBlockhash = await connection.getLatestBlockhash();
@@ -46,21 +43,25 @@ async function executeSwap(quote, userPublicKey) {
   return signature;
 }
 
-// Real trades via Jupiter's swap aggregator. Only ever instantiated when
-// TRADING_MODE=live and I_UNDERSTAND_THE_RISK=true (enforced in config.js).
+// Real trades via Jupiter's swap aggregator, signed with whichever keypair
+// this instance was built with. Each wallet (primary or added) gets its own
+// LiveBroker bound to its own keypair - never a shared global signer.
 export class LiveBroker {
+  constructor(keypair, walletId = "primary") {
+    this.keypair = keypair;
+    this.walletId = walletId;
+  }
+
   async getBalanceSol() {
-    const wallet = requireWallet();
-    const lamports = await connection.getBalance(wallet.publicKey);
+    const lamports = await connection.getBalance(this.keypair.publicKey);
     return lamports / LAMPORTS_PER_SOL;
   }
 
   async buy(mint, symbol, priceSol, solAmount) {
-    const wallet = requireWallet();
     const amountLamports = Math.round(solAmount * LAMPORTS_PER_SOL).toString();
 
     const quote = await getQuote(SOL_MINT, mint, amountLamports);
-    const signature = await executeSwap(quote, wallet.publicKey.toBase58());
+    const signature = await executeSwap(quote, this.keypair);
 
     const mintInfo = await getMintInfo(mint);
     const decimals = mintInfo?.decimals ?? 6;
@@ -68,6 +69,7 @@ export class LiveBroker {
 
     store.recordTrade({
       id: crypto.randomUUID(),
+      walletId: this.walletId,
       mint,
       symbol,
       isWatchlisted: false,
@@ -84,18 +86,18 @@ export class LiveBroker {
   }
 
   async sell(mint, symbol, priceSol, amountTokens) {
-    const wallet = requireWallet();
     const mintInfo = await getMintInfo(mint);
     const decimals = mintInfo?.decimals ?? 6;
     const amountRaw = Math.round(amountTokens * 10 ** decimals).toString();
 
     const quote = await getQuote(mint, SOL_MINT, amountRaw);
-    const signature = await executeSwap(quote, wallet.publicKey.toBase58());
+    const signature = await executeSwap(quote, this.keypair);
 
     const amountSolReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
     store.recordTrade({
       id: crypto.randomUUID(),
+      walletId: this.walletId,
       mint,
       symbol,
       isWatchlisted: false,

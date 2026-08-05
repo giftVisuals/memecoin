@@ -14,6 +14,10 @@ const DEFAULT_SETTINGS = {
   // rules - pausing never abandons a position mid-trade.
   tradingPaused: false,
 
+  // Display name for the primary wallet (from SOLANA_PRIVATE_KEY) in the
+  // dashboard's Wallets tab.
+  primaryWalletName: "Main",
+
   watchlistKeywords: ["trump", "elon", "musk", "melania"],
 
   positionSizeSol: 0.01,
@@ -51,6 +55,7 @@ function readFromEnvDefaults() {
 
   return {
     tradingPaused: false,
+    primaryWalletName: DEFAULT_SETTINGS.primaryWalletName,
     watchlistKeywords: str("WATCHLIST_KEYWORDS", DEFAULT_SETTINGS.watchlistKeywords.join(","))
       .split(",")
       .map((k) => k.trim().toLowerCase())
@@ -122,6 +127,11 @@ export function getSettings() {
 export function updateSettings(partial) {
   const current = load();
   const next = { ...current };
+
+  if (partial.primaryWalletName !== undefined) {
+    const trimmed = String(partial.primaryWalletName).trim();
+    if (trimmed) next.primaryWalletName = trimmed;
+  }
 
   if (partial.watchlistKeywords !== undefined) {
     if (!Array.isArray(partial.watchlistKeywords)) {

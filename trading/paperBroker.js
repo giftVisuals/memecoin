@@ -5,21 +5,26 @@ import { store } from "../persistence/store.js";
 const SIMULATED_SLIPPAGE_PCT = 2;
 
 export class PaperBroker {
+  constructor(walletId = "primary") {
+    this.walletId = walletId;
+  }
+
   async getBalanceSol() {
-    return store.getPaperBalance();
+    return store.getPaperBalance(this.walletId);
   }
 
   async buy(mint, symbol, priceSol, solAmount) {
-    const balance = store.getPaperBalance();
+    const balance = store.getPaperBalance(this.walletId);
     if (solAmount > balance) {
       throw new Error(`Paper balance too low: have ${balance} SOL, need ${solAmount} SOL`);
     }
     const effectivePrice = priceSol * (1 + SIMULATED_SLIPPAGE_PCT / 100);
     const amountTokens = solAmount / effectivePrice;
 
-    store.setPaperBalance(balance - solAmount);
+    store.setPaperBalance(this.walletId, balance - solAmount);
     store.recordTrade({
       id: crypto.randomUUID(),
+      walletId: this.walletId,
       mint,
       symbol,
       isWatchlisted: false,
@@ -38,10 +43,11 @@ export class PaperBroker {
     const effectivePrice = priceSol * (1 - SIMULATED_SLIPPAGE_PCT / 100);
     const amountSolReceived = amountTokens * effectivePrice;
 
-    const balance = store.getPaperBalance();
-    store.setPaperBalance(balance + amountSolReceived);
+    const balance = store.getPaperBalance(this.walletId);
+    store.setPaperBalance(this.walletId, balance + amountSolReceived);
     store.recordTrade({
       id: crypto.randomUUID(),
+      walletId: this.walletId,
       mint,
       symbol,
       isWatchlisted: false,

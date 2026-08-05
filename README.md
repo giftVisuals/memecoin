@@ -56,16 +56,52 @@ safety filters below.
 Every deploy serves a small web dashboard ("G4 Scraper") at the service's
 Railway URL, password-protected with HTTP basic auth:
 
-- **Overview** - net PnL, total earned, total lost, memecoins traded, win
-  rate, wallet balance, and any currently open positions with live PnL %.
+- **Overview** - combined totals across every wallet: net PnL, total earned,
+  total lost, memecoins traded, win rate, combined balance, and every
+  currently open position (tagged with which wallet holds it) with live PnL %.
+- **Wallets** - the primary wallet (from `SOLANA_PRIVATE_KEY`) plus any
+  additional wallets added from the dashboard. See "Multiple wallets" below.
 - **Settings** - watchlist keywords, position sizing, every safety filter,
-  and every exit rule. Changes save to `data/settings.json` and apply to the
-  bot's very next decision — no redeploy needed.
-- **History** - every trade the bot has made, paper or live.
+  and every exit rule — shared across all wallets. Changes save to
+  `data/settings.json` and apply to the bot's very next decision — no
+  redeploy needed.
+- **History** - every trade any wallet has made, paper or live.
 
 Login username is fixed as `g4`; the password comes from `DASHBOARD_PASSWORD`.
 If you don't set it, the bot generates a random one at boot and prints it once
 to the logs — set it explicitly in Railway so it's stable across restarts.
+
+## Multiple wallets
+
+The bot supports more than one wallet trading at once - e.g. one per family
+member. All wallets share the same strategy (one watchlist, one set of
+filters, one set of exit rules), but each has its own funds, its own PnL,
+and its own pause switch. When a token passes every filter, the bot buys it
+independently in every wallet that isn't paused - each wallet risks only its
+own balance, and one wallet's trade never affects another's.
+
+**Setup (one-time):** set `WALLET_ENCRYPTION_KEY` in Railway to any long
+random string. This encrypts every added wallet's private key before it's
+written to disk or backed up to the cloud - without it, "Add Wallet" just
+shows an error telling you to set it.
+
+**Adding a wallet:** Wallets tab → Family Wallets → **+ Add Wallet** → give
+it a name. The private key is shown exactly once - copy it somewhere safe as
+your own personal backup, same as the primary wallet's flow - but unlike the
+primary wallet, this one doesn't need to go anywhere else. It's already
+saved (encrypted) so the bot can trade with it. New wallets start **paused**
+on purpose - switch them on from the same list once you're ready.
+
+**Funding:** send SOL to the address shown on that wallet's card, same as
+funding the primary wallet.
+
+**Removing a wallet:** Remove button on its card. Blocked while it has an
+open position, so funds/positions are never orphaned mid-trade.
+
+Keep `WALLET_ENCRYPTION_KEY` stable once you've added wallets with it -
+changing it makes previously-added wallets undecryptable by the bot (you'd
+still have each one's own key from its one-time reveal to import elsewhere
+if that ever happens).
 
 ## Project layout
 
@@ -78,12 +114,13 @@ generateWallet.js   run once to create a wallet: node generateWallet.js
 config.js           reads .env - restart-required settings only (mode, wallet, port)
 settings.js         dashboard-editable settings, persisted to data/settings.json
 constants.js        shared constants (SOL mint address, lamports/SOL)
-wallet.js           loads the signing keypair from SOLANA_PRIVATE_KEY
+wallet.js           loads the primary signing keypair from SOLANA_PRIVATE_KEY
 solanaConnection.js shared RPC connection + mint-account reader
 sources/            pump.fun feed, DexScreener client, watchlist matcher
 safety/             liquidity/holder/authority filters, honeypot check
-trading/            position (TP/SL/trailing), paper broker, live broker, engine
-persistence/        JSON trade + PnL stats log (data/store.json), optional cloud backup
+trading/            position (TP/SL/trailing), paper/live brokers, multi-account engine
+persistence/        JSON trade + PnL stats log (store.json), encrypted wallet
+                     store (wallets.json), optional cloud backup
 notify/             console logger
 web/                dashboard API server + basic auth
 public/             dashboard frontend (plain HTML/CSS/JS, no framework)
@@ -117,8 +154,8 @@ move, but prices, liquidity, and safety checks are all real market data.
 ## Persistent storage on Railway
 
 Railway's filesystem resets on every redeploy by default. Without something
-in place, that means your trade history and any settings you've changed from
-the dashboard get wiped every time new code ships. Two ways to fix it —
+in place, that means your trade history, dashboard settings, and any added
+family wallets get wiped every time new code ships. Two ways to fix it —
 pick one:
 
 **Option A: Cloud backup (recommended if you don't have a laptop handy)**

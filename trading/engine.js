@@ -7,24 +7,53 @@ import { isWatchlisted } from "../sources/watchlist.js";
 import { runSafetyFilters } from "../safety/filters.js";
 import { checkSellable } from "../safety/honeypot.js";
 import { getMintInfo } from "../solanaConnection.js";
+import { requireWallet } from "../wallet.js";
+import { walletStore } from "../persistence/walletStore.js";
+import { store } from "../persistence/store.js";
 import { Position } from "./position.js";
 import { PaperBroker } from "./paperBroker.js";
 import { LiveBroker } from "./liveBroker.js";
 
 const TICK_INTERVAL_MS = 5000;
+const PRIMARY_ID = "primary";
+
+function makeBroker(walletId, keypair) {
+  return config.tradingMode === "live" ? new LiveBroker(keypair, walletId) : new PaperBroker(walletId);
+}
+
+// One trading account = one wallet's own broker + open positions. The
+// primary account (from SOLANA_PRIVATE_KEY) always exists; additional
+// accounts come from walletStore and can be added/removed/paused live from
+// the dashboard, no redeploy needed.
+class Account {
+  constructor({ id, name, broker }) {
+    this.id = id;
+    this.name = name;
+    this.broker = broker;
+    this.openPositions = new Map();
+  }
+
+  isPaused() {
+    if (this.id === PRIMARY_ID) return getSettings().tradingPaused;
+    return walletStore.get(this.id)?.paused ?? true;
+  }
+}
 
 export class TradingEngine {
   source = new PumpFunSource();
-  broker = config.tradingMode === "live" ? new LiveBroker() : new PaperBroker();
+  accounts = [];
   pending = new Map();
-  openPositions = new Map();
   tickHandle = null;
 
   async start() {
-    logger.info(
-      `Starting in ${config.tradingMode.toUpperCase()} mode. ` +
-        `Balance: ${(await this.broker.getBalanceSol()).toFixed(4)} SOL`
-    );
+    this.accounts = this.buildPrimaryAccount();
+    this.syncAccounts();
+
+    logger.info(`Starting in ${config.tradingMode.toUpperCase()} mode with ${this.accounts.length} wallet(s):`);
+    for (const account of this.accounts) {
+      const balance = await account.broker.getBalanceSol();
+      logger.info(`  - ${account.name}: ${balance.toFixed(4)} SOL${account.isPaused() ? " (paused)" : ""}`);
+    }
 
     this.source.on("newToken", (event) => this.onNewToken(event));
     this.source.on("connected", () => logger.info("Connected to pump.fun new-token feed"));
@@ -43,31 +72,87 @@ export class TradingEngine {
     if (this.tickHandle) clearInterval(this.tickHandle);
   }
 
+  buildPrimaryAccount() {
+    const primaryName = getSettings().primaryWalletName || "Main";
+    if (config.tradingMode === "live") {
+      return [new Account({ id: PRIMARY_ID, name: primaryName, broker: makeBroker(PRIMARY_ID, requireWallet()) })];
+    }
+    return [new Account({ id: PRIMARY_ID, name: primaryName, broker: makeBroker(PRIMARY_ID, null) })];
+  }
+
+  // Picks up wallets added/removed from the dashboard without needing a
+  // restart. Cheap enough to run every tick (walletStore is in-memory
+  // cached after the first read).
+  syncAccounts() {
+    const desired = walletStore.listRaw();
+    const desiredIds = new Set([PRIMARY_ID, ...desired.map((w) => w.id)]);
+
+    const kept = this.accounts.filter((a) => desiredIds.has(a.id));
+    if (kept.length !== this.accounts.length) {
+      const removedNames = this.accounts.filter((a) => !desiredIds.has(a.id)).map((a) => a.name);
+      logger.info(`Wallet(s) removed: ${removedNames.join(", ")}`);
+    }
+    this.accounts = kept;
+
+    const currentIds = new Set(this.accounts.map((a) => a.id));
+    for (const record of desired) {
+      if (currentIds.has(record.id)) continue;
+      const keypair = config.tradingMode === "live" ? walletStore.getKeypair(record.id) : null;
+      this.accounts.push(new Account({ id: record.id, name: record.name, broker: makeBroker(record.id, keypair) }));
+      logger.info(`Wallet account added: ${record.name}`);
+    }
+  }
+
   // Read by the dashboard API. Uses each position's last-known price (set
   // during monitorPositions ticks) instead of fetching fresh here, so
   // polling the dashboard never adds extra DexScreener/RPC load.
   async getStatus() {
-    const balanceSol = await this.broker.getBalanceSol();
+    this.syncAccounts();
+
+    const accounts = await Promise.all(
+      this.accounts.map(async (account) => {
+        let balanceSol = null;
+        try {
+          balanceSol = await account.broker.getBalanceSol();
+        } catch (err) {
+          logger.error(`Balance check failed for ${account.name}: ${err.message}`);
+        }
+        return {
+          id: account.id,
+          name: account.name,
+          balanceSol,
+          paused: account.isPaused(),
+          stats: store.getStats(account.id),
+          openPositions: [...account.openPositions.values()].map((p) => ({
+            mint: p.mint,
+            symbol: p.symbol,
+            isWatchlisted: p.isWatchlisted,
+            entryPriceSol: p.entryPriceSol,
+            lastPriceSol: p.lastPriceSol,
+            pnlPct: p.pnlPct(p.lastPriceSol),
+            amountSolSpent: p.amountSolSpent,
+            openedAt: p.openedAt,
+          })),
+        };
+      })
+    );
+
     return {
       mode: config.tradingMode,
-      balanceSol,
-      tradingPaused: getSettings().tradingPaused,
       pendingCandidates: this.pending.size,
-      openPositions: [...this.openPositions.values()].map((p) => ({
-        mint: p.mint,
-        symbol: p.symbol,
-        isWatchlisted: p.isWatchlisted,
-        entryPriceSol: p.entryPriceSol,
-        lastPriceSol: p.lastPriceSol,
-        pnlPct: p.pnlPct(p.lastPriceSol),
-        amountSolSpent: p.amountSolSpent,
-        openedAt: p.openedAt,
-      })),
+      familyStats: store.getStats(),
+      accounts,
     };
   }
 
+  hasOpenPositions(walletId) {
+    const account = this.accounts.find((a) => a.id === walletId);
+    return (account?.openPositions.size ?? 0) > 0;
+  }
+
   onNewToken(event) {
-    if (this.pending.has(event.mint) || this.openPositions.has(event.mint)) return;
+    const alreadyOpen = this.accounts.some((a) => a.openPositions.has(event.mint));
+    if (this.pending.has(event.mint) || alreadyOpen) return;
     this.pending.set(event.mint, { event });
 
     const watchlistTag = isWatchlisted(event.name, event.symbol) ? " [WATCHLIST]" : "";
@@ -102,11 +187,9 @@ export class TradingEngine {
   async evaluateCandidate(candidate, ageSec) {
     const { event } = candidate;
 
-    if (getSettings().tradingPaused) {
-      // Leave it in `pending` rather than dropping it - if trading resumes
-      // before it ages out, it still gets a fair evaluation.
-      return;
-    }
+    this.syncAccounts();
+    const activeAccounts = this.accounts.filter((a) => !a.isPaused());
+    if (activeAccounts.length === 0) return; // nobody's trading right now, don't burn API quota
 
     const pair = await fetchPairData(event.mint);
     if (!pair) return; // not indexed by DexScreener yet, try again next tick
@@ -128,31 +211,41 @@ export class TradingEngine {
     }
 
     this.pending.delete(event.mint);
-    await this.buy(event, pair.priceSol);
+
+    for (const account of activeAccounts) {
+      await this.buyForAccount(account, event, pair.priceSol);
+    }
   }
 
-  async buy(event, priceSol) {
+  async buyForAccount(account, event, priceSol) {
     const settings = getSettings();
 
-    if (this.openPositions.size >= settings.maxConcurrentPositions) {
-      logger.info(
-        `Skipping ${event.symbol}: max concurrent positions (${settings.maxConcurrentPositions}) reached`
-      );
+    if (account.openPositions.has(event.mint)) return; // shouldn't happen, defensive
+
+    if (account.openPositions.size >= settings.maxConcurrentPositions) {
+      logger.info(`Skipping ${event.symbol} for ${account.name}: max concurrent positions reached`);
       return;
     }
 
     const watchlisted = isWatchlisted(event.name, event.symbol);
     const targetSize = settings.positionSizeSol * (watchlisted ? settings.watchlistPositionMultiplier : 1);
-    const balance = await this.broker.getBalanceSol();
+
+    let balance;
+    try {
+      balance = await account.broker.getBalanceSol();
+    } catch (err) {
+      logger.error(`Balance check failed for ${account.name}: ${err.message}`);
+      return;
+    }
 
     if (balance < targetSize * 0.5) {
-      logger.warn(`Skipping ${event.symbol}: balance too low (${balance.toFixed(4)} SOL)`);
+      logger.warn(`Skipping ${event.symbol} for ${account.name}: balance too low (${balance.toFixed(4)} SOL)`);
       return;
     }
     const solAmount = Math.min(targetSize, balance);
 
     try {
-      const result = await this.broker.buy(event.mint, event.symbol, priceSol, solAmount);
+      const result = await account.broker.buy(event.mint, event.symbol, priceSol, solAmount);
       const position = new Position({
         mint: event.mint,
         symbol: event.symbol,
@@ -162,36 +255,43 @@ export class TradingEngine {
         amountSolSpent: result.amountSolSpent,
         openedAt: Date.now(),
       });
-      this.openPositions.set(event.mint, position);
+      account.openPositions.set(event.mint, position);
       logger.trade(
-        `BOUGHT ${event.symbol} - ${solAmount.toFixed(4)} SOL @ ${priceSol.toFixed(8)} SOL/token` +
+        `BOUGHT ${event.symbol} for ${account.name} - ${solAmount.toFixed(4)} SOL @ ${priceSol.toFixed(8)} SOL/token` +
           (watchlisted ? " (watchlisted - extended targets)" : "")
       );
     } catch (err) {
-      logger.error(`Buy failed for ${event.symbol}: ${err}`);
+      logger.error(`Buy failed for ${event.symbol} (${account.name}): ${err}`);
     }
   }
 
   async monitorPositions() {
     const now = Date.now();
+    const priceCache = new Map(); // avoid re-fetching the same mint for every account that holds it
 
-    for (const [mint, position] of this.openPositions) {
-      const pair = await fetchPairData(mint);
-      if (!pair) continue;
+    for (const account of this.accounts) {
+      for (const [mint, position] of account.openPositions) {
+        let pair = priceCache.get(mint);
+        if (pair === undefined) {
+          pair = await fetchPairData(mint);
+          priceCache.set(mint, pair);
+        }
+        if (!pair) continue;
 
-      const { shouldClose, reason } = position.evaluate(pair.priceSol, now);
-      if (!shouldClose) continue;
+        const { shouldClose, reason } = position.evaluate(pair.priceSol, now);
+        if (!shouldClose) continue;
 
-      try {
-        const result = await this.broker.sell(mint, position.symbol, pair.priceSol, position.amountTokens);
-        const pnlPct = position.pnlPct(pair.priceSol);
-        this.openPositions.delete(mint);
-        logger.trade(
-          `SOLD ${position.symbol} - reason: ${reason}, pnl: ${pnlPct.toFixed(1)}%, ` +
-            `received ${result.amountSolReceived.toFixed(4)} SOL`
-        );
-      } catch (err) {
-        logger.error(`Sell failed for ${position.symbol}: ${err}`);
+        try {
+          const result = await account.broker.sell(mint, position.symbol, pair.priceSol, position.amountTokens);
+          const pnlPct = position.pnlPct(pair.priceSol);
+          account.openPositions.delete(mint);
+          logger.trade(
+            `SOLD ${position.symbol} for ${account.name} - reason: ${reason}, pnl: ${pnlPct.toFixed(1)}%, ` +
+              `received ${result.amountSolReceived.toFixed(4)} SOL`
+          );
+        } catch (err) {
+          logger.error(`Sell failed for ${position.symbol} (${account.name}): ${err}`);
+        }
       }
     }
   }
