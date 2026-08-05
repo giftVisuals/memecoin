@@ -169,7 +169,8 @@ export class TradingEngine {
 
       if (ageSec > settings.maxTokenAgeSec) {
         this.pending.delete(mint);
-        logger.info(`Dropped ${candidate.event.symbol}: aged out of the buy window`);
+        const lastReason = candidate.lastReason ? ` (last reason: ${candidate.lastReason})` : "";
+        logger.info(`Dropped ${candidate.event.symbol}: aged out of the buy window${lastReason}`);
         continue;
       }
 
@@ -195,16 +196,21 @@ export class TradingEngine {
 
     const filterResult = await runSafetyFilters(event.mint, pair, ageSec);
     if (!filterResult.passed) {
-      this.pending.delete(event.mint);
-      logger.info(`Rejected ${event.symbol}: ${filterResult.reasons.join("; ")}`);
+      // Stays in `pending` and gets re-checked next tick, rather than being
+      // thrown away after one look - liquidity and holder concentration in
+      // particular change fast in a token's first few minutes (holder %
+      // especially: the earliest buyer(s) naturally hold a large share right
+      // after launch and it dilutes as more people buy in). Only aging out
+      // of the window (handled by the caller) or a passing/disqualifying
+      // result removes it for good.
+      this.logRejectionIfChanged(candidate, filterResult.reasons.join("; "));
       return;
     }
 
     const decimals = filterResult.mintInfo?.decimals ?? 6;
     const honeypotCheck = await checkSellable(event.mint, decimals);
     if (!honeypotCheck.sellable) {
-      this.pending.delete(event.mint);
-      logger.info(`Rejected ${event.symbol}: ${honeypotCheck.reason}`);
+      this.logRejectionIfChanged(candidate, honeypotCheck.reason);
       return;
     }
 
@@ -213,6 +219,15 @@ export class TradingEngine {
     for (const account of activeAccounts) {
       await this.buyForAccount(account, event, pair.priceSol);
     }
+  }
+
+  // Only logs when the reason actually changes, so a candidate sitting in
+  // `pending` for 3 minutes doesn't spam an identical "Rejected" line every
+  // 5-second tick.
+  logRejectionIfChanged(candidate, reason) {
+    if (candidate.lastReason === reason) return;
+    candidate.lastReason = reason;
+    logger.info(`Rejected ${candidate.event.symbol} (rechecking until it passes or ages out): ${reason}`);
   }
 
   async buyForAccount(account, event, priceSol) {
