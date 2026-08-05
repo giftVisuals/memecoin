@@ -50,8 +50,15 @@ export class TradingEngine {
 
     logger.info(`Starting in ${config.tradingMode.toUpperCase()} mode with ${this.accounts.length} wallet(s):`);
     for (const account of this.accounts) {
-      const balance = await account.broker.getBalanceSol();
-      logger.info(`  - ${account.name}: ${balance.toFixed(4)} SOL${account.isPaused() ? " (paused)" : ""}`);
+      try {
+        const balance = await account.broker.getBalanceSol();
+        logger.info(`  - ${account.name}: ${balance.toFixed(4)} SOL${account.isPaused() ? " (paused)" : ""}`);
+      } catch (err) {
+        // A boot-time RPC hiccup (rate limit, timeout) must never take the
+        // whole bot down - this is just a startup log line, not a trading
+        // decision. Balance gets checked again on every buy attempt anyway.
+        logger.error(`  - ${account.name}: could not check balance at boot (${err.message})`);
+      }
     }
 
     this.source.on("newToken", (event) => this.onNewToken(event));
