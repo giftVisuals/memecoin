@@ -23,7 +23,17 @@ export async function runSafetyFilters(mint, pair, ageSec) {
   if (ageSec > f.maxTokenAgeSec) {
     reasons.push(`too old (${ageSec}s > ${f.maxTokenAgeSec}s window - momentum likely already spent)`);
   }
-  if (pair.liquiditySol < f.minLiquiditySol) {
+  // A liquiditySol of exactly 0 is NOT treated as "confirmed zero liquidity"
+  // here - DexScreener doesn't reliably report liquidity for pump.fun tokens
+  // still on the bonding curve (pre-Raydium-migration), which is every
+  // candidate in our buy window, since migration takes far longer than 180
+  // seconds. Hard-blocking on that unverifiable "0" was rejecting every
+  // single candidate regardless of the configured threshold. Real
+  // tradability for these tokens is verified downstream instead, by the
+  // honeypot/sellability check asking Jupiter directly whether a sell route
+  // exists - a much more direct signal than a field DexScreener doesn't
+  // populate at this stage.
+  if (pair.liquiditySol > 0 && pair.liquiditySol < f.minLiquiditySol) {
     reasons.push(`liquidity too low (${pair.liquiditySol.toFixed(2)} SOL < ${f.minLiquiditySol} SOL)`);
   }
 
