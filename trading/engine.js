@@ -89,7 +89,13 @@ export class TradingEngine {
         continue;
       }
 
-      await this.evaluateCandidate(candidate, ageSec);
+      try {
+        await this.evaluateCandidate(candidate, ageSec);
+      } catch (err) {
+        // One bad candidate (e.g. an RPC hiccup) shouldn't block every other
+        // candidate waiting behind it in this same tick.
+        logger.error(`Evaluating ${candidate.event.symbol} failed: ${err.message}`);
+      }
     }
   }
 
