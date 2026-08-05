@@ -18,8 +18,12 @@ function str(name, fallback) {
   return process.env[name] ?? fallback;
 }
 
-const tradingMode = str("TRADING_MODE", "paper");
+const tradingMode = str("TRADING_MODE", "paper").trim().toLowerCase();
 const understandRisk = bool("I_UNDERSTAND_THE_RISK", false);
+
+if (tradingMode !== "paper" && tradingMode !== "live") {
+  throw new Error(`TRADING_MODE must be "paper" or "live", got "${tradingMode}"`);
+}
 
 if (tradingMode === "live" && !understandRisk) {
   throw new Error(
