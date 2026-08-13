@@ -33,11 +33,41 @@ const DEFAULT_SETTINGS = {
   maxTokenAgeSec: 180,
   maxSellPriceImpactPct: 15,
 
+  // Flat take-profit close. Only used when profitRatchetEnabled is false -
+  // when the ratchet is on, it takes over deciding when to lock in gains
+  // instead of just selling everything the moment price doubles.
   takeProfitPct: 50,
   stopLossPct: 20,
   trailingStopPct: 15,
   maxHoldTimeSec: 900,
+
+  // "Let winners run instead of selling at the first 2X": once price hits a
+  // rung's trigger multiple, the stop floor locks up to that rung's floor
+  // multiple instead of closing the position outright. Format is
+  // "trigger:floor" pairs, e.g. "2:1" = once price hits 2X entry, floor
+  // becomes 1X (breakeven) - the position keeps running with the downside
+  // capped at "no loss" instead of exiting. Past the last rung, trailingStopPct
+  // takes over as a plain percentage giveback from the high so there's no
+  // need to hand-tune rungs for infinity.
+  profitRatchetEnabled: true,
+  profitRatchetLadder: "2:1,3:2,5:3,10:8,20:15",
 };
+
+// Parses "2:1,3:2,5:3" into [{at:2,floor:1}, {at:3,floor:2}, {at:5,floor:3}],
+// sorted ascending by trigger multiple. Used by position.js on every new
+// position (ladder is read once at open, matching how TP/SL/trailing are
+// already snapshotted at open time). Invalid/malformed entries are skipped
+// rather than throwing, so a typo in the dashboard field can't crash trading.
+export function parseRatchetLadder(str) {
+  return String(str || "")
+    .split(",")
+    .map((pair) => {
+      const [at, floor] = pair.split(":").map((n) => Number(n.trim()));
+      return { at, floor };
+    })
+    .filter((r) => Number.isFinite(r.at) && Number.isFinite(r.floor) && r.at > 1 && r.floor <= r.at)
+    .sort((a, b) => a.at - b.at);
+}
 
 function ensureDataDir() {
   fs.mkdirSync(config.dataDir, { recursive: true });
@@ -84,6 +114,8 @@ function readFromEnvDefaults() {
     stopLossPct: num("STOP_LOSS_PCT", DEFAULT_SETTINGS.stopLossPct),
     trailingStopPct: num("TRAILING_STOP_PCT", DEFAULT_SETTINGS.trailingStopPct),
     maxHoldTimeSec: num("MAX_HOLD_TIME_SEC", DEFAULT_SETTINGS.maxHoldTimeSec),
+    profitRatchetEnabled: bool("PROFIT_RATCHET_ENABLED", DEFAULT_SETTINGS.profitRatchetEnabled),
+    profitRatchetLadder: str("PROFIT_RATCHET_LADDER", DEFAULT_SETTINGS.profitRatchetLadder),
   };
 }
 
@@ -122,7 +154,12 @@ const NUMERIC_KEYS = [
   "trailingStopPct",
   "maxHoldTimeSec",
 ];
-const BOOLEAN_KEYS = ["requireMintAuthorityRenounced", "requireFreezeAuthorityRenounced", "tradingPaused"];
+const BOOLEAN_KEYS = [
+  "requireMintAuthorityRenounced",
+  "requireFreezeAuthorityRenounced",
+  "tradingPaused",
+  "profitRatchetEnabled",
+];
 
 export function getSettings() {
   return load();
@@ -148,6 +185,14 @@ export async function updateSettings(partial) {
     next.watchlistKeywords = partial.watchlistKeywords
       .map((k) => String(k).trim().toLowerCase())
       .filter(Boolean);
+  }
+
+  if (partial.profitRatchetLadder !== undefined) {
+    const str = String(partial.profitRatchetLadder).trim();
+    if (!str || parseRatchetLadder(str).length === 0) {
+      throw new Error('profitRatchetLadder must look like "2:1,3:2,5:3,10:8" (trigger multiple : floor multiple)');
+    }
+    next.profitRatchetLadder = str;
   }
 
   for (const key of NUMERIC_KEYS) {

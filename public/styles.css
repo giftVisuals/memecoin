@@ -394,6 +394,20 @@ body {
   gap: 14px;
 }
 
+.field > span small {
+  font-weight: 400;
+  color: var(--text-secondary);
+  opacity: 0.75;
+}
+
+.field-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  opacity: 0.85;
+  margin: -4px 0 4px;
+}
+
 .field-toggles {
   display: flex;
   flex-direction: column;
