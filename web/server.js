@@ -53,37 +53,39 @@ export function startDashboardServer(engine) {
     }
   });
 
-  // Wallet/trading routes only make sense in paper/live mode - signal mode
-  // never holds funds or opens positions, so these are simply not
-  // registered rather than left in place to error against a SignalEngine
-  // that has no wallets or open-position tracking.
+  // The primary wallet (SOLANA_PRIVATE_KEY) matters in every mode now -
+  // signal mode's Buy Now button spends from it too - so these two stay
+  // registered regardless of tradingMode.
+  app.get("/api/wallet", async (req, res) => {
+    const wallet = loadWallet();
+    if (!wallet) {
+      res.json({ hasWallet: false });
+      return;
+    }
+    try {
+      const lamports = await connection.getBalance(wallet.publicKey);
+      res.json({
+        hasWallet: true,
+        address: wallet.publicKey.toBase58(),
+        balanceSol: lamports / LAMPORTS_PER_SOL,
+      });
+    } catch (err) {
+      res.json({ hasWallet: true, address: wallet.publicKey.toBase58(), balanceSol: null, error: err.message });
+    }
+  });
+
+  // Generates a keypair and returns the secret key exactly once - nothing
+  // is written to disk or logged. The user must copy it and set it as
+  // SOLANA_PRIVATE_KEY in Railway themselves; this endpoint can't do that
+  // part for them, since it doesn't have access to Railway's variables.
+  app.post("/api/wallet/generate", (req, res) => {
+    res.json(generateNewWallet());
+  });
+
+  // Multiple managed wallets (one per family member, auto-traded together)
+  // only makes sense in paper/live mode - signal mode has exactly one
+  // wallet (the primary one, above) and no auto-trading to assign it to.
   if (config.tradingMode !== "signal") {
-    app.get("/api/wallet", async (req, res) => {
-      const wallet = loadWallet();
-      if (!wallet) {
-        res.json({ hasWallet: false });
-        return;
-      }
-      try {
-        const lamports = await connection.getBalance(wallet.publicKey);
-        res.json({
-          hasWallet: true,
-          address: wallet.publicKey.toBase58(),
-          balanceSol: lamports / LAMPORTS_PER_SOL,
-        });
-      } catch (err) {
-        res.json({ hasWallet: true, address: wallet.publicKey.toBase58(), balanceSol: null, error: err.message });
-      }
-    });
-
-    // Generates a keypair and returns the secret key exactly once - nothing
-    // is written to disk or logged. The user must copy it and set it as
-    // SOLANA_PRIVATE_KEY in Railway themselves; this endpoint can't do that
-    // part for them, since it doesn't have access to Railway's variables.
-    app.post("/api/wallet/generate", (req, res) => {
-      res.json(generateNewWallet());
-    });
-
     // Additional (managed) wallets beyond the primary one - each entry here
     // has its private key encrypted at rest and is fully driven by the
     // dashboard, no Railway variables involved.
