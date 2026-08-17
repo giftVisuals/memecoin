@@ -426,6 +426,7 @@ async function loadSettings() {
   document.getElementById("watchlistKeywords").value = settings.watchlistKeywords.join(", ");
   document.getElementById("primaryWalletName").textContent = settings.primaryWalletName || "Main";
   document.getElementById("profitRatchetLadder").value = settings.profitRatchetLadder;
+  document.getElementById("smartWallets").value = settings.smartWallets;
   for (const key of settingsFields) {
     const el = document.getElementById(key);
     if (el) el.value = settings[key];
@@ -449,6 +450,7 @@ document.getElementById("settingsForm").addEventListener("submit", async (e) => 
       .map((k) => k.trim())
       .filter(Boolean),
     profitRatchetLadder: document.getElementById("profitRatchetLadder").value.trim(),
+    smartWallets: document.getElementById("smartWallets").value.trim(),
   };
   for (const key of settingsFields) {
     payload[key] = Number(document.getElementById(key).value);

@@ -34,6 +34,32 @@ dashboard's Wallets/Trading tabs don't apply in this mode (nothing trades),
 though the Settings tab still controls the safety thresholds used to decide
 what's worth alerting on.
 
+### Smart wallet watching (optional, not free)
+
+The new-token alerts above are entirely free. Watching specific wallets and
+alerting when they buy something is a separate, optional feature that
+**does cost a small amount of real SOL** to run, because it uses a different
+part of PumpPortal's API than the free new-token feed:
+
+1. Visit `https://pumpportal.fun/api/create-wallet` in a browser - it
+   returns a brand new wallet plus a linked API key as JSON.
+2. Send a small amount of SOL to that wallet (e.g. 0.05) - it's metered at
+   0.01 SOL per 10,000 trade events streamed for the wallets you're
+   watching, charged from this wallet. A short list of a few dozen wallets
+   should cost very little, but keep only what you're comfortable spending
+   in it and check on it occasionally.
+3. Set `PUMPPORTAL_API_KEY` in Railway to the `apiKey` from step 1.
+   **Treat this like a private key** - it can also place trades using that
+   wallet's funds. Don't share it, don't commit it, and don't reuse your
+   `SOLANA_PRIVATE_KEY` wallet for this - use a fresh one.
+4. In the dashboard's Settings tab, add wallet addresses to the "Smart
+   Wallets" field as `label:address` pairs (one per line). The bot doesn't
+   discover these on its own - you add ones you already trust, e.g. copied
+   from a "top traders" leaderboard on a site like Birdeye or GMGN.
+
+Leave `PUMPPORTAL_API_KEY` blank to skip this entirely - new-token alerts
+keep working normally either way.
+
 ## Read this before doing anything else
 
 Memecoin sniping is high-risk by nature: most new tokens rug, many are outright

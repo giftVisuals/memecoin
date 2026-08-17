@@ -175,6 +175,22 @@
 
           <div class="card">
             <div class="card-header">
+              <h2>Smart Wallets</h2>
+            </div>
+            <p class="card-hint">
+              Wallets to watch for buys, alerted to Telegram as "SMART WALLET BUY". One per line or comma
+              separated, as <code>label:address</code> - e.g. <code>Whale1:7xKX...gAsU</code>. You add these
+              yourself (copied from a leaderboard you trust); the bot doesn't discover them on its own.
+              Requires <code>PUMPPORTAL_API_KEY</code> to actually watch - see README. The list itself is
+              safe to fill in either way.
+            </p>
+            <div class="field">
+              <textarea id="smartWallets" rows="3" placeholder="Whale1:7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU"></textarea>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-header">
               <h2>Position Sizing</h2>
             </div>
             <div class="field-grid">

@@ -59,7 +59,37 @@ const DEFAULT_SETTINGS = {
   // need to hand-tune rungs for infinity.
   profitRatchetEnabled: true,
   profitRatchetLadder: "2:1,3:2,5:3,10:8,20:15",
+
+  // Signal mode only: wallets to watch for "smart money" buy alerts.
+  // Format: "label:address" pairs, comma or newline separated. You add
+  // these yourself (e.g. copied from a "top traders" leaderboard you
+  // trust) - the bot doesn't discover them on its own, since doing that
+  // reliably needs a paid firehose subscription. Requires
+  // PUMPPORTAL_API_KEY to actually watch them; the list itself is safe to
+  // fill in either way.
+  smartWallets: "",
 };
+
+// Parses "Whale1:Addr1, Whale2:Addr2\nWhale3:Addr3" into
+// [{label, address}, ...]. Entries that don't look like a plausible Solana
+// address (base58, 32-44 chars) are silently skipped rather than throwing -
+// a typo shouldn't be able to break the whole watchlist, and an all-skipped
+// result (or an empty string) is a valid "tracking nothing yet" state.
+const BASE58_ADDRESS_RE = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
+
+export function parseSmartWallets(str) {
+  return String(str || "")
+    .split(/[,\n]/)
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .map((entry) => {
+      const idx = entry.lastIndexOf(":");
+      const label = idx === -1 ? "Wallet" : entry.slice(0, idx).trim();
+      const address = (idx === -1 ? entry : entry.slice(idx + 1)).trim();
+      return { label: label || "Wallet", address };
+    })
+    .filter((w) => BASE58_ADDRESS_RE.test(w.address));
+}
 
 // Parses "2:1,3:2,5:3" into [{at:2,floor:1}, {at:3,floor:2}, {at:5,floor:3}],
 // sorted ascending by trigger multiple. Used by position.js on every new
@@ -127,6 +157,7 @@ function readFromEnvDefaults() {
     maxHoldTimeSec: num("MAX_HOLD_TIME_SEC", DEFAULT_SETTINGS.maxHoldTimeSec),
     profitRatchetEnabled: bool("PROFIT_RATCHET_ENABLED", DEFAULT_SETTINGS.profitRatchetEnabled),
     profitRatchetLadder: str("PROFIT_RATCHET_LADDER", DEFAULT_SETTINGS.profitRatchetLadder),
+    smartWallets: str("SMART_WALLETS", DEFAULT_SETTINGS.smartWallets),
   };
 }
 
@@ -207,6 +238,13 @@ export async function updateSettings(partial) {
       throw new Error('profitRatchetLadder must look like "2:1,3:2,5:3,10:8" (trigger multiple : floor multiple)');
     }
     next.profitRatchetLadder = str;
+  }
+
+  if (partial.smartWallets !== undefined) {
+    // Empty is fine (tracking nothing yet) - no validation error, unlike the
+    // ratchet ladder above. Malformed individual entries are just quietly
+    // dropped by parseSmartWallets when the list is actually read.
+    next.smartWallets = String(partial.smartWallets).trim();
   }
 
   for (const key of NUMERIC_KEYS) {

@@ -2,6 +2,7 @@ import { config } from "./config.js";
 import { logger } from "./notify/logger.js";
 import { TradingEngine } from "./trading/engine.js";
 import { SignalEngine } from "./signals/engine.js";
+import { WhaleEngine } from "./signals/whaleEngine.js";
 import { telegramEnabled } from "./notify/telegram.js";
 import { startDashboardServer } from "./web/server.js";
 import { restoreFromCloud, enabled as cloudBackupEnabled } from "./persistence/cloudBackup.js";
@@ -29,17 +30,24 @@ await restoreFromCloud();
 const engine = config.tradingMode === "signal" ? new SignalEngine() : new TradingEngine();
 await engine.start();
 
+// Independent of the main engine - its own metered connection, its own
+// on/off switch (PUMPPORTAL_API_KEY), only relevant in signal mode.
+const whaleEngine = config.tradingMode === "signal" ? new WhaleEngine() : null;
+if (whaleEngine) await whaleEngine.start();
+
 const dashboard = startDashboardServer(engine);
 
 process.on("SIGINT", () => {
   logger.info("Shutting down...");
   engine.stop();
+  whaleEngine?.stop();
   dashboard.close();
   process.exit(0);
 });
 process.on("SIGTERM", () => {
   logger.info("Shutting down...");
   engine.stop();
+  whaleEngine?.stop();
   dashboard.close();
   process.exit(0);
 });

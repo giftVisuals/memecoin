@@ -22,6 +22,8 @@ export async function fetchPairData(mint) {
 
   return {
     pairAddress: best.pairAddress,
+    name: best.baseToken?.name ?? "unknown",
+    symbol: best.baseToken?.symbol ?? "???",
     priceSol: Number(best.priceNative ?? 0),
     liquiditySol,
     liquidityUsd: best.liquidity?.usd ?? 0,

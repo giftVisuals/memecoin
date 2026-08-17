@@ -20,9 +20,9 @@ function emoji(bool) {
   return bool ? "✅" : "❌";
 }
 
-// Shared block used by both the plain new-token alert and (later) the CT
-// signal alert, so the two message types stay visually consistent.
-function tokenStatsBlock({
+// Shared block used by every alert type (new-token, smart-wallet-buy, and
+// later CT signal), so they all stay visually consistent.
+export function tokenStatsBlock({
   liquidityUsd,
   marketCapUsd,
   holderCount,
@@ -64,6 +64,44 @@ export function formatNewTokenAlert({ event, mint, liquidityUsd, marketCapUsd, h
     tokenStatsBlock({ liquidityUsd, marketCapUsd, holderCount, top10Pct, ...score }),
     ``,
     `<a href="https://dexscreener.com/solana/${mint}">DexScreener</a> | <a href="https://birdeye.so/token/${mint}?chain=solana">Birdeye</a>`,
+    ``,
+    `🕒 ${timestamp}`,
+    ``,
+    `Not financial advice. DYOR before buying.`,
+  ].join("\n");
+}
+
+function shortAddress(address) {
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+export function formatWhaleBuyAlert({
+  walletLabel,
+  walletAddress,
+  mint,
+  name,
+  symbol,
+  liquidityUsd,
+  marketCapUsd,
+  holderCount,
+  top10Pct,
+  score,
+  solSpent,
+}) {
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+
+  return [
+    `🐋 SMART WALLET BUY`,
+    ``,
+    `👤 Wallet: ${escapeHtml(walletLabel)} (<code>${shortAddress(walletAddress)}</code>)`,
+    `💰 Bought: ${solSpent.toFixed(3)} SOL`,
+    ``,
+    `🪙 Token: ${escapeHtml(name)} (${escapeHtml(symbol)})`,
+    `📜 CA: <code>${mint}</code>`,
+    ``,
+    tokenStatsBlock({ liquidityUsd, marketCapUsd, holderCount, top10Pct, ...score }),
+    ``,
+    `<a href="https://dexscreener.com/solana/${mint}">DexScreener</a> | <a href="https://birdeye.so/token/${mint}?chain=solana">Birdeye</a> | <a href="https://solscan.io/account/${walletAddress}">Wallet on Solscan</a>`,
     ``,
     `🕒 ${timestamp}`,
     ``,
