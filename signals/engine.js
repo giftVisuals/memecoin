@@ -9,6 +9,7 @@ import { checkSellable } from "../safety/honeypot.js";
 import { scoreCandidate } from "./scorer.js";
 import { formatNewTokenAlert } from "./format.js";
 import { sendTelegramMessage, telegramEnabled } from "../notify/telegram.js";
+import { buyButtonMarkup } from "./manualTrading.js";
 import { alertStore } from "../persistence/alertStore.js";
 
 const TICK_INTERVAL_MS = 5000;
@@ -142,9 +143,9 @@ export class SignalEngine {
       score,
     });
 
-    const sent = await sendTelegramMessage(html);
+    const { ok } = await sendTelegramMessage(html, { replyMarkup: buyButtonMarkup(event.mint) });
     alertStore.markAlerted(event.mint); // mark alerted regardless - don't spam-retry a send failure forever
-    if (sent) {
+    if (ok) {
       logger.info(`Alerted on ${event.symbol}: confidence ${score.matchConfidencePct}%, risk ${score.riskScore}/10`);
     }
   }

@@ -67,6 +67,11 @@ async function refreshStatus() {
   modeBadge.textContent = data.mode.toUpperCase();
   modeBadge.className = `badge ${data.mode === "live" ? "badge-live" : "badge-paper"}`;
 
+  if (data.mode === "signal") {
+    refreshSignalStatus(data);
+    return;
+  }
+
   const totalBalance = data.accounts.reduce((sum, a) => sum + (a.balanceSol ?? 0), 0);
   document.getElementById("balanceBadge").textContent = `${totalBalance.toFixed(4)} SOL`;
 
@@ -83,6 +88,41 @@ async function refreshStatus() {
 
   renderOpenPositions(data.accounts);
   updatePrimaryPauseUi(data.accounts.find((a) => a.id === "primary"));
+}
+
+// Signal mode has no wallet accounts/paused state to show - "positions" here
+// are only ever the ones opened by tapping Buy Now on a Telegram alert.
+function refreshSignalStatus(data) {
+  const mt = data.manualTrading ?? { walletBalanceSol: null, openPositions: [], stats: {} };
+  const balanceText = mt.walletBalanceSol == null ? "-- SOL" : `${mt.walletBalanceSol.toFixed(4)} SOL`;
+  document.getElementById("balanceBadge").textContent = balanceText;
+
+  const stats = {
+    netPnlSol: 0,
+    totalEarnedSol: 0,
+    totalLostSol: 0,
+    tokensTraded: 0,
+    winRate: 0,
+    ...mt.stats,
+  };
+  const netPnlEl = document.getElementById("statNetPnl");
+  netPnlEl.textContent = formatSol(stats.netPnlSol);
+  netPnlEl.className = `stat-value ${pnlClass(stats.netPnlSol)}`;
+
+  document.getElementById("statEarned").textContent = formatSol(stats.totalEarnedSol);
+  document.getElementById("statLost").textContent = `-${Number(stats.totalLostSol).toFixed(4)} SOL`;
+  document.getElementById("statTokensTraded").textContent = stats.tokensTraded;
+  document.getElementById("statWinRate").textContent = `${stats.winRate.toFixed(0)}%`;
+  document.getElementById("statBalance").textContent = balanceText;
+
+  renderOpenPositions([{ id: "telegram", name: "Telegram (Buy Now)", openPositions: mt.openPositions ?? [] }]);
+
+  const pauseBadge = document.getElementById("primaryPauseBadge");
+  const pauseBtn = document.getElementById("primaryPauseToggleBtn");
+  pauseBadge.textContent = "N/A";
+  pauseBadge.className = "badge badge-muted";
+  pauseBtn.disabled = true;
+  pauseBtn.textContent = "Signal mode - nothing to pause";
 }
 
 function renderOpenPositions(accounts) {

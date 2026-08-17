@@ -10,6 +10,7 @@ import { checkSellable } from "../safety/honeypot.js";
 import { scoreCandidate } from "./scorer.js";
 import { formatWhaleBuyAlert } from "./format.js";
 import { sendTelegramMessage } from "../notify/telegram.js";
+import { buyButtonMarkup } from "./manualTrading.js";
 
 const WALLET_LIST_REFRESH_MS = 30_000;
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000; // don't re-alert the same wallet buying the same mint again within this
@@ -120,8 +121,8 @@ export class WhaleEngine {
       solSpent: event.solAmount,
     });
 
-    const sent = await sendTelegramMessage(html);
-    if (sent) {
+    const { ok } = await sendTelegramMessage(html, { replyMarkup: buyButtonMarkup(event.mint) });
+    if (ok) {
       logger.info(`Whale alert: ${tracked.label} bought ${event.mint} (${event.solAmount.toFixed(3)} SOL)`);
     }
   }

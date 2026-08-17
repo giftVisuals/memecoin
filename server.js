@@ -3,6 +3,7 @@ import { logger } from "./notify/logger.js";
 import { TradingEngine } from "./trading/engine.js";
 import { SignalEngine } from "./signals/engine.js";
 import { WhaleEngine } from "./signals/whaleEngine.js";
+import { manualTrading } from "./signals/manualTrading.js";
 import { telegramEnabled } from "./notify/telegram.js";
 import { startDashboardServer } from "./web/server.js";
 import { restoreFromCloud, enabled as cloudBackupEnabled } from "./persistence/cloudBackup.js";
@@ -14,7 +15,8 @@ if (config.tradingMode === "paper") {
 if (config.tradingMode === "signal") {
   logger.info(
     telegramEnabled
-      ? "Signal mode: watching pump.fun and alerting to Telegram. No funds ever move."
+      ? "Signal mode: watching pump.fun and alerting to Telegram. Nothing trades on its own - " +
+          "funds only move if you tap Buy Now on an alert."
       : "Signal mode: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set yet - candidates will be evaluated " +
           "but no alerts can be sent until both are configured in Railway."
   );
@@ -35,12 +37,17 @@ await engine.start();
 const whaleEngine = config.tradingMode === "signal" ? new WhaleEngine() : null;
 if (whaleEngine) await whaleEngine.start();
 
+// Buy Now / Sell Now button handling - also signal mode only, also inert
+// unless Telegram is configured.
+if (config.tradingMode === "signal") await manualTrading.start();
+
 const dashboard = startDashboardServer(engine);
 
 process.on("SIGINT", () => {
   logger.info("Shutting down...");
   engine.stop();
   whaleEngine?.stop();
+  manualTrading.stop();
   dashboard.close();
   process.exit(0);
 });
@@ -48,6 +55,7 @@ process.on("SIGTERM", () => {
   logger.info("Shutting down...");
   engine.stop();
   whaleEngine?.stop();
+  manualTrading.stop();
   dashboard.close();
   process.exit(0);
 });

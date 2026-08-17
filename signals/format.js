@@ -2,7 +2,7 @@
 // (anyone can name a token anything) - escaped before going into an HTML
 // parse_mode Telegram message so a malicious name can't inject markup or a
 // fake link into the alert.
-function escapeHtml(str) {
+export function escapeHtml(str) {
   return String(str)
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
@@ -73,6 +73,49 @@ export function formatNewTokenAlert({ event, mint, liquidityUsd, marketCapUsd, h
 
 function shortAddress(address) {
   return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function pnlLine(pnlPct) {
+  const arrow = pnlPct > 0 ? "📈" : pnlPct < 0 ? "📉" : "➖";
+  const sign = pnlPct > 0 ? "+" : "";
+  return `${arrow} PnL: ${sign}${pnlPct.toFixed(1)}%`;
+}
+
+// Replaces the original alert in place after a Buy Now tap. Deliberately
+// drops the original risk-score stats block - those mattered for the buy
+// decision, not for tracking a position you already opened - in favor of a
+// compact card that's easy to re-edit every price tick.
+export function formatOpenPositionCard({ symbol, mint, entryPriceSol, currentPriceSol, pnlPct, amountSolSpent }) {
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  return [
+    `✅ BOUGHT ${escapeHtml(symbol)}`,
+    ``,
+    `📜 CA: <code>${mint}</code>`,
+    `💵 Entry: ${entryPriceSol.toFixed(10)} SOL (spent ${amountSolSpent.toFixed(4)} SOL)`,
+    `💲 Current: ${currentPriceSol.toFixed(10)} SOL`,
+    pnlLine(pnlPct),
+    ``,
+    `🕒 Updated ${timestamp}`,
+  ].join("\n");
+}
+
+export function formatClosedPositionCard({ symbol, mint, entryPriceSol, exitPriceSol, pnlPct, pnlSol, amountSolSpent }) {
+  const timestamp = new Date().toISOString().replace("T", " ").slice(0, 19) + " UTC";
+  const sign = pnlSol >= 0 ? "+" : "";
+  return [
+    `🏁 SOLD ${escapeHtml(symbol)}`,
+    ``,
+    `📜 CA: <code>${mint}</code>`,
+    `💵 Entry: ${entryPriceSol.toFixed(10)} SOL (spent ${amountSolSpent.toFixed(4)} SOL)`,
+    `💲 Exit: ${exitPriceSol.toFixed(10)} SOL`,
+    `${pnlLine(pnlPct)} (${sign}${pnlSol.toFixed(4)} SOL)`,
+    ``,
+    `🕒 Closed ${timestamp}`,
+  ].join("\n");
+}
+
+export function formatBuyFailedNote(reason) {
+  return `\n\n❌ Buy failed: ${escapeHtml(reason)}. Tap Buy Now to retry.`;
 }
 
 export function formatWhaleBuyAlert({

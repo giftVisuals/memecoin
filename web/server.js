@@ -10,6 +10,7 @@ import { loadWallet, generateNewWallet } from "../wallet.js";
 import { walletStore } from "../persistence/walletStore.js";
 import { connection } from "../solanaConnection.js";
 import { LAMPORTS_PER_SOL } from "../constants.js";
+import { manualTrading } from "../signals/manualTrading.js";
 import { requireAuth } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,7 +26,11 @@ export function startDashboardServer(engine) {
   app.use(express.static(publicDir));
 
   app.get("/api/status", async (req, res) => {
-    res.json(await engine.getStatus());
+    const status = await engine.getStatus();
+    if (config.tradingMode === "signal") {
+      status.manualTrading = await manualTrading.getStatusSummary();
+    }
+    res.json(status);
   });
 
   app.get("/api/trades", (req, res) => {

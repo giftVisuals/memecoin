@@ -34,6 +34,22 @@ dashboard's Wallets/Trading tabs don't apply in this mode (nothing trades),
 though the Settings tab still controls the safety thresholds used to decide
 what's worth alerting on.
 
+### Buy Now / Sell Now buttons (optional - this one does move real funds)
+
+Every Telegram alert has a 🟢 **Buy Now** button. Tapping it executes a real
+swap using the `SOLANA_PRIVATE_KEY` wallet (the same one paper/live mode
+uses) sized by the Settings tab's Position Size - so set that to something
+small and confirm the wallet is funded before tapping anything. Once bought,
+the message turns into a live position card that updates its % PnL every
+~20 seconds and grows a 🔴 **Sell Now** button, which closes the position with
+a real swap back to SOL when tapped. Nothing sells automatically here - you
+decide the exit, same as you decided the entry.
+
+This is the one part of signal mode that isn't free of risk by design - the
+alerts themselves cost nothing and risk nothing, but the buttons do exactly
+what a manual trade in Phantom would do. If `SOLANA_PRIVATE_KEY` isn't set,
+tapping Buy Now just shows an error instead of doing anything.
+
 ### Smart wallet watching (optional, not free)
 
 The new-token alerts above are entirely free. Watching specific wallets and
