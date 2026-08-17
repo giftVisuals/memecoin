@@ -1,12 +1,38 @@
 # G4 Scraper (Solana memecoin bot)
 
 Watches for newly launched Solana memecoins (via pump.fun), runs them through
-safety filters, buys the ones that pass, and exits automatically on take-profit,
-stop-loss, a trailing stop, or a max hold time. Includes a "watchlist" mode for
-tokens named after notable people/events (e.g. a coin literally named "TRUMP"),
-which get larger sizing and more room to run. Ships with a password-protected
-web dashboard to watch PnL and tune everything without touching code or
-redeploying.
+safety filters, and by default sends a Telegram alert for the ones that pass
+instead of trading anything — you decide manually whether to buy. It can
+still auto-trade (paper or live) if you want that instead; see "Modes" below.
+
+## Modes
+
+- **`signal` (default, recommended)** - no wallet, no funds at risk. Watches
+  pump.fun, scores every new token, and sends a Telegram message for the ones
+  that clear the bar - contract address in a tap-to-copy code block, plus
+  liquidity, market cap, holder count/concentration, mint/freeze authority
+  status, a sellability check, a risk score, and a match confidence %. You
+  (or whoever's fastest) decide manually whether to actually buy.
+- **`paper`** - simulates buying/selling with fake money, for testing the
+  strategy end to end without risking anything.
+- **`live`** - the same auto-trading logic, but with a real wallet and real
+  funds. Requires `TRADING_MODE=live` and `I_UNDERSTAND_THE_RISK=true`.
+
+### Setting up signal mode
+
+1. Get a Telegram bot token from [@BotFather](https://t.me/BotFather), or
+   reuse an existing bot's token.
+2. Open a chat with your bot and send it any message - a bot can't message
+   you until you've messaged it first.
+3. Visit `https://api.telegram.org/bot<YOUR_TOKEN>/getUpdates` in a browser
+   and find `"chat":{"id": ...}` in the response - that's your chat ID.
+4. In Railway, set `TRADING_MODE=signal`, `TELEGRAM_BOT_TOKEN`, and
+   `TELEGRAM_CHAT_ID`.
+
+That's it - no wallet, no `WALLET_ENCRYPTION_KEY`, no funds needed. The
+dashboard's Wallets/Trading tabs don't apply in this mode (nothing trades),
+though the Settings tab still controls the safety thresholds used to decide
+what's worth alerting on.
 
 ## Read this before doing anything else
 
@@ -28,7 +54,11 @@ multiple unrelated "Epstein" tokens deployed by randoms). That's exactly why
 watchlist status only changes position size and hold time — it never skips the
 safety filters below.
 
-## How it decides
+## How it decides (paper/live trading modes)
+
+In signal mode, steps 1-5 below are the same (discovery, wait window, safety
+filters, honeypot check, watchlist check feed into the risk score/confidence
+in the Telegram alert) - steps 6-7 (buy/exit) just don't happen.
 
 1. **Discovery** - subscribes to pump.fun's public new-token feed (via
    PumpPortal) for every newly created token.

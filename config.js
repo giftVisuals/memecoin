@@ -21,8 +21,10 @@ function str(name, fallback) {
 const tradingMode = str("TRADING_MODE", "paper").trim().toLowerCase();
 const understandRisk = bool("I_UNDERSTAND_THE_RISK", false);
 
-if (tradingMode !== "paper" && tradingMode !== "live") {
-  throw new Error(`TRADING_MODE must be "paper" or "live", got "${tradingMode}"`);
+// "signal" mode never places a trade - it just watches and sends Telegram
+// alerts. No wallet, no funds at risk, nothing to lose on a bad call.
+if (tradingMode !== "paper" && tradingMode !== "live" && tradingMode !== "signal") {
+  throw new Error(`TRADING_MODE must be "paper", "live", or "signal", got "${tradingMode}"`);
 }
 
 if (tradingMode === "live" && !understandRisk) {
@@ -55,6 +57,14 @@ export const config = {
   },
 
   dataDir: str("DATA_DIR", "./data"),
+
+  // Only needed for TRADING_MODE=signal. Get the token from @BotFather (or
+  // reuse an existing bot like @vewogrobot's token). Chat ID is the
+  // destination for alerts - see README for how to find it.
+  telegram: {
+    botToken: str("TELEGRAM_BOT_TOKEN", ""),
+    chatId: str("TELEGRAM_CHAT_ID", ""),
+  },
 
   port: num("PORT", 3000),
   dashboardPassword: str("DASHBOARD_PASSWORD", ""),

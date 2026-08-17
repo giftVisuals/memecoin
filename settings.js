@@ -33,6 +33,14 @@ const DEFAULT_SETTINGS = {
   maxTokenAgeSec: 180,
   maxSellPriceImpactPct: 15,
 
+  // TRADING_MODE=signal only: how good a candidate has to look before it's
+  // worth pinging Telegram about. Kept separate from the trading filters
+  // above since "worth alerting a human" is a lower bar than "worth an
+  // automatic buy."
+  minMatchConfidencePct: 50,
+  minHolderCount: 10,
+  maxTop10HolderPct: 50,
+
   // Flat take-profit close. Only used when profitRatchetEnabled is false -
   // when the ratchet is on, it takes over deciding when to lock in gains
   // instead of just selling everything the moment price doubles.
@@ -110,6 +118,9 @@ function readFromEnvDefaults() {
     minTokenAgeSec: num("MIN_TOKEN_AGE_SEC", DEFAULT_SETTINGS.minTokenAgeSec),
     maxTokenAgeSec: num("MAX_TOKEN_AGE_SEC", DEFAULT_SETTINGS.maxTokenAgeSec),
     maxSellPriceImpactPct: num("MAX_SELL_PRICE_IMPACT_PCT", DEFAULT_SETTINGS.maxSellPriceImpactPct),
+    minMatchConfidencePct: num("MIN_MATCH_CONFIDENCE_PCT", DEFAULT_SETTINGS.minMatchConfidencePct),
+    minHolderCount: num("MIN_HOLDER_COUNT", DEFAULT_SETTINGS.minHolderCount),
+    maxTop10HolderPct: num("MAX_TOP10_HOLDER_PCT", DEFAULT_SETTINGS.maxTop10HolderPct),
     takeProfitPct: num("TAKE_PROFIT_PCT", DEFAULT_SETTINGS.takeProfitPct),
     stopLossPct: num("STOP_LOSS_PCT", DEFAULT_SETTINGS.stopLossPct),
     trailingStopPct: num("TRAILING_STOP_PCT", DEFAULT_SETTINGS.trailingStopPct),
@@ -149,6 +160,9 @@ const NUMERIC_KEYS = [
   "minTokenAgeSec",
   "maxTokenAgeSec",
   "maxSellPriceImpactPct",
+  "minMatchConfidencePct",
+  "minHolderCount",
+  "maxTop10HolderPct",
   "takeProfitPct",
   "stopLossPct",
   "trailingStopPct",

@@ -1,12 +1,22 @@
 import { config } from "./config.js";
 import { logger } from "./notify/logger.js";
 import { TradingEngine } from "./trading/engine.js";
+import { SignalEngine } from "./signals/engine.js";
+import { telegramEnabled } from "./notify/telegram.js";
 import { startDashboardServer } from "./web/server.js";
 import { restoreFromCloud, enabled as cloudBackupEnabled } from "./persistence/cloudBackup.js";
 
 logger.info(`Memecoin bot booting - mode: ${config.tradingMode}`);
 if (config.tradingMode === "paper") {
   logger.info("Paper trading mode: no real funds are used. Tune the strategy here before going live.");
+}
+if (config.tradingMode === "signal") {
+  logger.info(
+    telegramEnabled
+      ? "Signal mode: watching pump.fun and alerting to Telegram. No funds ever move."
+      : "Signal mode: TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID not set yet - candidates will be evaluated " +
+          "but no alerts can be sent until both are configured in Railway."
+  );
 }
 logger.info(
   cloudBackupEnabled
@@ -16,7 +26,7 @@ logger.info(
 );
 await restoreFromCloud();
 
-const engine = new TradingEngine();
+const engine = config.tradingMode === "signal" ? new SignalEngine() : new TradingEngine();
 await engine.start();
 
 const dashboard = startDashboardServer(engine);

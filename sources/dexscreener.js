@@ -24,6 +24,7 @@ export async function fetchPairData(mint) {
     pairAddress: best.pairAddress,
     priceSol: Number(best.priceNative ?? 0),
     liquiditySol,
+    liquidityUsd: best.liquidity?.usd ?? 0,
     fdvUsd: best.fdv ?? 0,
     pairCreatedAt: best.pairCreatedAt ?? Date.now(),
     volume24hUsd: best.volume?.h24 ?? 0,
