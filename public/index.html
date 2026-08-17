@@ -159,6 +159,16 @@
 
       <!-- SETTINGS -->
       <section id="settings" class="panel">
+        <div class="card">
+          <div class="card-header">
+            <h2>Telegram</h2>
+            <span id="telegramStatusBadge" class="badge badge-muted">--</span>
+          </div>
+          <p class="card-hint">Send a made-up alert to your Telegram so you can see the exact format before a real one shows up.</p>
+          <button type="button" id="sendTestAlertBtn" class="btn-primary">Send Test Alert</button>
+          <span id="testAlertStatus" class="settings-status"></span>
+        </div>
+
         <form id="settingsForm">
           <div class="card">
             <div class="card-header">

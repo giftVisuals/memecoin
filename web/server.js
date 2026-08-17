@@ -11,6 +11,9 @@ import { walletStore } from "../persistence/walletStore.js";
 import { connection } from "../solanaConnection.js";
 import { LAMPORTS_PER_SOL } from "../constants.js";
 import { manualTrading } from "../signals/manualTrading.js";
+import { sendTelegramMessage, telegramEnabled } from "../notify/telegram.js";
+import { formatNewTokenAlert } from "../signals/format.js";
+import { scoreCandidate } from "../signals/scorer.js";
 import { requireAuth } from "./auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -38,6 +41,46 @@ export function startDashboardServer(engine) {
       (a, b) => new Date(b.timestamp) - new Date(a.timestamp)
     );
     res.json(trades.slice(0, 100));
+  });
+
+  // Sends a made-up alert with realistic numbers so you can see the exact
+  // format Telegram alerts use without waiting for a real token to trigger
+  // one. Deliberately has no Buy Now button - the mint is fake, so a real
+  // buy attempt against it would just fail confusingly, or worse, encourage
+  // tapping "buy" on something that was never a real signal.
+  app.post("/api/test-alert", async (req, res) => {
+    if (!telegramEnabled) {
+      res.status(400).json({ error: "Telegram not configured yet - set TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID first." });
+      return;
+    }
+
+    const score = scoreCandidate({
+      mintInfo: { mintAuthorityRenounced: true, freezeAuthorityRenounced: true, supply: 1_000_000_000, decimals: 6 },
+      top1Pct: 12.4,
+      top10Pct: 27.4,
+      holderCount: 341,
+      liquiditySol: 300,
+      sellable: true,
+    });
+    const mint = "TestMint1111111111111111111111111111111111";
+    const html =
+      `🧪 <b>TEST MESSAGE</b> - this is what a real alert looks like. Not a real signal, no Buy Now button on purpose.\n\n` +
+      formatNewTokenAlert({
+        event: { name: "Example Doge Meme", symbol: "EDOGE", mint },
+        mint,
+        liquidityUsd: 48200,
+        marketCapUsd: 612000,
+        holderCount: 341,
+        top10Pct: 27.4,
+        score,
+      });
+
+    const { ok } = await sendTelegramMessage(html);
+    if (!ok) {
+      res.status(502).json({ error: "Telegram rejected the message - double check TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID." });
+      return;
+    }
+    res.json({ ok: true });
   });
 
   app.get("/api/settings", (req, res) => {

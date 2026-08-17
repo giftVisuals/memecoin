@@ -117,6 +117,15 @@ function refreshSignalStatus(data) {
 
   renderOpenPositions([{ id: "telegram", name: "Telegram (Buy Now)", openPositions: mt.openPositions ?? [] }]);
 
+  const telegramBadge = document.getElementById("telegramStatusBadge");
+  if (data.telegramConfigured) {
+    telegramBadge.textContent = "Configured";
+    telegramBadge.className = "badge badge-active";
+  } else {
+    telegramBadge.textContent = "Not configured";
+    telegramBadge.className = "badge badge-paused";
+  }
+
   const pauseBadge = document.getElementById("primaryPauseBadge");
   const pauseBtn = document.getElementById("primaryPauseToggleBtn");
   pauseBadge.textContent = "N/A";
@@ -514,6 +523,26 @@ document.getElementById("settingsForm").addEventListener("submit", async (e) => 
   } catch (err) {
     statusEl.textContent = `Failed to save: ${err.message}`;
     statusEl.className = "settings-status error";
+  }
+});
+
+document.getElementById("sendTestAlertBtn").addEventListener("click", async () => {
+  const btn = document.getElementById("sendTestAlertBtn");
+  const statusEl = document.getElementById("testAlertStatus");
+  btn.disabled = true;
+  statusEl.textContent = "Sending...";
+  statusEl.className = "settings-status";
+  try {
+    const res = await fetch("/api/test-alert", { method: "POST" });
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.error || `Request failed (${res.status})`);
+    statusEl.textContent = "Sent - check Telegram.";
+    statusEl.className = "settings-status success";
+  } catch (err) {
+    statusEl.textContent = `Failed: ${err.message}`;
+    statusEl.className = "settings-status error";
+  } finally {
+    btn.disabled = false;
   }
 });
 
