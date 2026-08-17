@@ -66,15 +66,6 @@ export const config = {
     chatId: str("TELEGRAM_CHAT_ID", ""),
   },
 
-  // Optional, signal mode only: powers "smart wallet" watching (alerts when
-  // a wallet you're tracking buys something). Unlike the free new-token
-  // feed, PumpPortal meters this per trade event streamed and requires a
-  // funded, trade-capable API key - see README before setting this. Feature
-  // is simply off with this unset.
-  pumpportal: {
-    apiKey: str("PUMPPORTAL_API_KEY", ""),
-  },
-
   port: num("PORT", 3000),
   dashboardPassword: str("DASHBOARD_PASSWORD", ""),
 

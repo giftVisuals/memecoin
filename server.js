@@ -32,8 +32,9 @@ await restoreFromCloud();
 const engine = config.tradingMode === "signal" ? new SignalEngine() : new TradingEngine();
 await engine.start();
 
-// Independent of the main engine - its own metered connection, its own
-// on/off switch (PUMPPORTAL_API_KEY), only relevant in signal mode.
+// Independent of the main engine - free (uses the same Helius RPC
+// connection), only relevant in signal mode, inert until the dashboard's
+// Smart Wallets list has at least one address in it.
 const whaleEngine = config.tradingMode === "signal" ? new WhaleEngine() : null;
 if (whaleEngine) await whaleEngine.start();
 

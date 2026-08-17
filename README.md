@@ -50,31 +50,24 @@ alerts themselves cost nothing and risk nothing, but the buttons do exactly
 what a manual trade in Phantom would do. If `SOLANA_PRIVATE_KEY` isn't set,
 tapping Buy Now just shows an error instead of doing anything.
 
-### Smart wallet watching (optional, not free)
+### Smart wallet watching (optional, free)
 
-The new-token alerts above are entirely free. Watching specific wallets and
-alerting when they buy something is a separate, optional feature that
-**does cost a small amount of real SOL** to run, because it uses a different
-part of PumpPortal's API than the free new-token feed:
+Watches specific wallets and alerts when they buy something. No separate
+wallet, no API key, no setup cost - it runs on the same Helius RPC
+connection (`SOLANA_RPC_URL`) as everything else in the bot, using
+standard Solana log subscriptions rather than a paid indexing service.
 
-1. Visit `https://pumpportal.fun/api/create-wallet` in a browser - it
-   returns a brand new wallet plus a linked API key as JSON.
-2. Send a small amount of SOL to that wallet (e.g. 0.05) - it's metered at
-   0.01 SOL per 10,000 trade events streamed for the wallets you're
-   watching, charged from this wallet. A short list of a few dozen wallets
-   should cost very little, but keep only what you're comfortable spending
-   in it and check on it occasionally.
-3. Set `PUMPPORTAL_API_KEY` in Railway to the `apiKey` from step 1.
-   **Treat this like a private key** - it can also place trades using that
-   wallet's funds. Don't share it, don't commit it, and don't reuse your
-   `SOLANA_PRIVATE_KEY` wallet for this - use a fresh one.
-4. In the dashboard's Settings tab, add wallet addresses to the "Smart
-   Wallets" field as `label:address` pairs (one per line). The bot doesn't
-   discover these on its own - you add ones you already trust, e.g. copied
-   from a "top traders" leaderboard on a site like Birdeye or GMGN.
+In the dashboard's Settings tab, add wallet addresses to the "Smart
+Wallets" field as `label:address` pairs (one per line). The bot doesn't
+discover these on its own - you add ones you already trust, e.g. copied
+from a "top traders" leaderboard on a site like Birdeye or GMGN. Watching
+starts automatically as soon as the list has at least one address in it.
 
-Leave `PUMPPORTAL_API_KEY` blank to skip this entirely - new-token alerts
-keep working normally either way.
+One trade-off worth knowing: because this reads raw transactions instead of
+a pre-built "buy" feed, it catches a tracked wallet's buys on any exchange
+(Jupiter, Raydium, pump.fun, etc.), not just pump.fun specifically - broader
+coverage, but very occasionally it can miss or misread an unusual
+transaction shape. Nothing to configure differently either way.
 
 ## Read this before doing anything else
 

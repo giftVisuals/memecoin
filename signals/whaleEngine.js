@@ -1,7 +1,6 @@
-import { config } from "../config.js";
 import { getSettings, parseSmartWallets } from "../settings.js";
 import { logger } from "../notify/logger.js";
-import { PumpFunAccountTradeSource } from "../sources/pumpfunAccountTrades.js";
+import { WalletTradeWatcher } from "../sources/walletTradeWatcher.js";
 import { fetchPairData } from "../sources/dexscreener.js";
 import { getSolUsdPrice } from "../sources/solPrice.js";
 import { getMintInfo } from "../solanaConnection.js";
@@ -15,29 +14,17 @@ import { buyButtonMarkup } from "./manualTrading.js";
 const WALLET_LIST_REFRESH_MS = 30_000;
 const DEDUPE_WINDOW_MS = 10 * 60 * 1000; // don't re-alert the same wallet buying the same mint again within this
 
-// Watches a dashboard-curated list of wallets (settings.smartWallets) via
-// PumpPortal's metered subscribeAccountTrade feed, and sends a Telegram
-// alert whenever one of them buys something. Entirely inert (no socket
-// opened, no cost incurred) until both PUMPPORTAL_API_KEY is set and the
-// list has at least one address in it.
+// Watches a dashboard-curated list of wallets (settings.smartWallets) and
+// sends a Telegram alert whenever one of them buys something. Free - runs
+// on the same Helius RPC connection as everything else, no separate wallet
+// or API key needed. Entirely inert until the list has at least one address
+// in it.
 export class WhaleEngine {
-  source = new PumpFunAccountTradeSource();
+  source = new WalletTradeWatcher();
   recentAlerts = new Map(); // "wallet:mint" -> last alerted timestamp
   refreshHandle = null;
-  warnedNoApiKey = false;
 
   async start() {
-    if (!config.pumpportal.apiKey) {
-      logger.info(
-        "Smart wallet watching not configured (PUMPPORTAL_API_KEY unset) - skipping. " +
-          "Add wallets in Settings and set the key to turn this on."
-      );
-      return;
-    }
-
-    this.source.on("connected", () => logger.info("Connected to PumpPortal wallet-trade feed"));
-    this.source.on("disconnected", () => logger.warn("Disconnected from wallet-trade feed, reconnecting..."));
-    this.source.on("error", (err) => logger.error(`Wallet-trade feed error: ${err.message}`));
     this.source.on("walletTrade", (event) => {
       if (event.side === "buy") this.onWalletBuy(event).catch((err) => logger.error(`Whale alert failed: ${err}`));
     });
@@ -47,7 +34,7 @@ export class WhaleEngine {
       logger.info(`Watching ${addresses.length} smart wallet(s) for buys.`);
       this.source.start(addresses);
     } else {
-      logger.info("Smart wallet watching configured but the list is empty - add some in Settings.");
+      logger.info("Smart wallet watching: list is empty - add wallets in Settings to turn this on.");
     }
 
     this.refreshHandle = setInterval(() => this.refreshWalletList(), WALLET_LIST_REFRESH_MS);
@@ -63,15 +50,8 @@ export class WhaleEngine {
   }
 
   refreshWalletList() {
-    if (!config.pumpportal.apiKey) return;
     const addresses = this.currentAddresses();
-    if (addresses.length === 0) return;
-    if (!this.source.ws) {
-      logger.info(`Watching ${addresses.length} smart wallet(s) for buys.`);
-      this.source.start(addresses);
-    } else {
-      this.source.updateAddresses(addresses);
-    }
+    this.source.updateAddresses(addresses); // no-ops internally if unchanged
   }
 
   async onWalletBuy(event) {
@@ -105,7 +85,7 @@ export class WhaleEngine {
     });
 
     const solUsd = await getSolUsdPrice();
-    const marketCapUsd = pair?.fdvUsd > 0 ? pair.fdvUsd : event.marketCapSol * solUsd;
+    const marketCapUsd = pair?.fdvUsd ?? 0;
 
     const html = formatWhaleBuyAlert({
       walletLabel: tracked.label,

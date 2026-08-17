@@ -63,10 +63,9 @@ const DEFAULT_SETTINGS = {
   // Signal mode only: wallets to watch for "smart money" buy alerts.
   // Format: "label:address" pairs, comma or newline separated. You add
   // these yourself (e.g. copied from a "top traders" leaderboard you
-  // trust) - the bot doesn't discover them on its own, since doing that
-  // reliably needs a paid firehose subscription. Requires
-  // PUMPPORTAL_API_KEY to actually watch them; the list itself is safe to
-  // fill in either way.
+  // trust) - the bot doesn't discover them on its own. Free to watch (uses
+  // the same Helius RPC connection as everything else) - just add an
+  // address here and watching starts on the next refresh.
   smartWallets: "",
 };
 
